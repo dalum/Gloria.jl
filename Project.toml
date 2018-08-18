@@ -1,0 +1,7 @@
+name = "Gloria"
+uuid = "5b2e8964-9f3b-11e8-3f79-610468876dfe"
+authors = ["Sakse Dalum <dalum@users.noreply.github.com>"]
+version = "0.1.0"
+
+[deps]
+SimpleDirectMediaLayer = "98e33af6-2ee5-5afd-9e75-cbc738b767c4"
