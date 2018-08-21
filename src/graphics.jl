@@ -16,6 +16,7 @@ end
 
 function Texture(window::Window, fname::String, args...)
     if fname in keys(window.resources)
+        @info "re-using resource: \"$fname\""
         return window.resources[fname]
     end
 

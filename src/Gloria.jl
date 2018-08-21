@@ -114,8 +114,6 @@ function Window(title::String, (width, height)::Tuple{Int,Int}, initial_scene::A
     end
     push!(_loops, Task(renderloop))
 
-    schedule.(_loops)
-
     return window
 end
 
@@ -123,6 +121,15 @@ function destroy!(window::Window)
     SDL.DestroyWindow(window.window_ptr)
     SDL.DestroyRenderer(window.render_ptr)
     return nothing
+end
+
+function start(;keepalive = false)
+    schedule.(_loops)
+    if keepalive
+        while !all(istaskdone, _loops)
+            sleep(0.1)
+        end
+    end
 end
 
 update!(obj::AbstractObject; kwargs...) = nothing
@@ -148,7 +155,11 @@ eventtype(e::Event) = bitcat(UInt32, e.data[4:-1:1])
 
 handleevent(::Val, e::Event) = nothing
 function handleevent(::Val{SDL.QUIT}, e::Event)
-    println("Quit!")
+    for window in _windows
+        while length(window.scene_stack) > 0
+            pop!(window.scene_stack)
+        end
+    end
 end
 
 include("graphics.jl")

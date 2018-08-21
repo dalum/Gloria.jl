@@ -44,4 +44,6 @@ function Gloria.render!(window::Window, obj::Object; args...)
     Gloria.render!(window, obj.texture, obj.x, obj.y, obj.θ)
 end
 
+Gloria.start(keepalive = true)
+
 end # module
