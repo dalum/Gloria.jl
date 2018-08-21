@@ -4,4 +4,7 @@ authors = ["Sakse Dalum <dalum@users.noreply.github.com>"]
 version = "0.1.0"
 
 [deps]
+Cairo = "159f3aea-2a34-519c-b102-8c37f9878175"
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+Rsvg = "c4c386cf-5103-5370-be45-f3a111cca3b8"
 SimpleDirectMediaLayer = "98e33af6-2ee5-5afd-9e75-cbc738b767c4"

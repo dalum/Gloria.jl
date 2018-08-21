@@ -3,123 +3,155 @@ module Gloria
 using SimpleDirectMediaLayer
 const SDL = SimpleDirectMediaLayer
 
-const _window_ptr = Ptr{SDL.Window}[0]
-const _render_ptr = Ptr{SDL.Renderer}[0]
-const _setup = Bool[false]
-const _running = Bool[false]
-const _loops = Set{Task}()
+abstract type AbstractWindow end
+abstract type AbstractScene end
+abstract type AbstractObject end
+abstract type AbstractResource end
+
+"""
+
+A Window is the main GUI element.
+
+"""
+mutable struct Window <: AbstractWindow
+    window_ptr::Ptr{SDL.Window}
+    render_ptr::Ptr{SDL.Renderer}
+    scene_stack::Vector{<:AbstractScene}
+    resources::Dict{String, AbstractResource}
+end
+
+"""
+
+A Scene object runs inside a Window.  Only one scene can be active
+inside the window at any time.
+
+"""
+mutable struct Scene <: AbstractScene
+    objects::Vector{AbstractObject}
+end
+
+const _windows = AbstractWindow[]
+const _loops = Task[]
 
 function init()
-    SDL.GL_SetAttribute(SDL.GL_MULTISAMPLEBUFFERS, 16)
-    SDL.GL_SetAttribute(SDL.GL_MULTISAMPLESAMPLES, 16)
+    # SDL.GL_SetAttribute(SDL.GL_MULTISAMPLEBUFFERS, 16)
+    # SDL.GL_SetAttribute(SDL.GL_MULTISAMPLESAMPLES, 16)
     SDL.init()
 end
 
-function setup(title::String, width::Int, height::Int;
-               fullscreen::Bool = false)
-    if !_setup[]
-        _window_ptr[] = SDL.CreateWindow(title,
-                                                Int32(SDL.WINDOWPOS_CENTERED_MASK),
-                                                Int32(SDL.WINDOWPOS_CENTERED_MASK),
-                                                Int32(width), Int32(height),
-                                                fullscreen ? SDL.WINDOW_FULLSCREEN : UInt32(0))
-        _render_ptr[] = SDL.CreateRenderer(_window_ptr[], Int32(-1),
-                                                  UInt32(SDL.RENDERER_ACCELERATED | SDL.RENDERER_PRESENTVSYNC))
-        _setup[] = true
-    else
-        @info "Gloria has already been setup, ignoring"
+function Base.size(window::Window)
+    width, height = Int32[0], Int32[0]
+    SDL.GetWindowSize(window.window_ptr, pointer(width), pointer(height))
+    return width[], height[]
+end
+
+"""
+
+Create a Window with a title, size, and initial scene.
+
+"""
+Window(title::String, (width, height)::Tuple{Int,Int}; kwargs...) = Window(title, (width, height), Scene(AbstractObject[]); kwargs...)
+
+function Window(title::String, (width, height)::Tuple{Int,Int}, initial_scene::AbstractScene;
+                target_fps::Number = 30.0, target_speed::Number = 50.0, fullscreen::Bool = false)
+    window_ptr = SDL.CreateWindow(title,
+                                  Int32(SDL.WINDOWPOS_CENTERED_MASK),
+                                  Int32(SDL.WINDOWPOS_CENTERED_MASK),
+                                  Int32(width), Int32(height),
+                                  fullscreen ? SDL.WINDOW_FULLSCREEN : UInt32(0))
+    render_ptr = SDL.CreateRenderer(window_ptr, Int32(-1),
+                                    UInt32(SDL.RENDERER_ACCELERATED | SDL.RENDERER_PRESENTVSYNC))
+    SDL.SetRenderDrawBlendMode(render_ptr, SDL.BLENDMODE_BLEND)
+    scene_stack = AbstractScene[initial_scene]
+    resources = Dict{String,AbstractResource}()
+
+    window = Window(window_ptr, render_ptr, scene_stack, resources)
+    finalizer(destroy!, window)
+    push!(_windows, window)
+
+    # Update loop
+    function updateloop()
+        t0 = time()
+        t = 0
+        dt = 1/target_speed
+        while length(scene_stack) > 0
+            event = Event()
+            while SDL.PollEvent(event.data) != 0
+                handleevent(Val(eventtype(event)), event)
+            end
+            for obj in scene_stack[end].objects
+                update!(obj, t=t, dt=dt)
+            end
+            t1 = time()
+            dt = t1 - t0
+            t0 = t1
+            t += dt
+            sleep(max(1/target_speed - dt - 0.001, 0.0))
+        end
     end
+    push!(_loops, Task(updateloop))
 
-    return nothing
-end
-
-function quit()
-    SDL.DestroyWindow(_window_ptr[])
-    SDL.DestroyRenderer(_render_ptr[])
-    _setup[] = false
-
-    return nothing
-end
-
-function eventloop(fn::Function)
-    if _running[]
-        @error "Cannot setup event loop while running"
-    else
-        loop = @task begin
-            while _running[]
-                event = Array{UInt8}(zeros(56))
-                while SDL.PollEvent(event) != 0
-                    fn(event)
+    # Render loop
+    function renderloop()
+        t0 = time()
+        frame = 1
+        actual_fps = target_fps
+        while length(scene_stack) > 0
+            t = time()
+            for _ in 1:ceil(target_fps)
+                for obj in scene_stack[end].objects
+                    render!(_windows[end], obj, frame=frame, fps=actual_fps)
                 end
-                sleep(0)
+                t1 = time()
+                time_elapsed = time() - t0
+                t0 = t1
+                frame += 1
+                sleep(max(1/target_fps - time_elapsed - 0.001, 0.0))
             end
+            actual_fps = target_fps / (time() - t)
         end
-        push!(_loops, loop)
+        return nothing
     end
+    push!(_loops, Task(renderloop))
+
+    schedule.(_loops)
+
+    return window
+end
+
+function destroy!(window::Window)
+    SDL.DestroyWindow(window.window_ptr)
+    SDL.DestroyRenderer(window.render_ptr)
     return nothing
 end
 
-function updateloop(fn::Function; target_speed::Real = 100.0)
-    if _running[]
-        @error "Cannot setup update loop while running"
-    else
-        loop = @task begin
-            t = 0.0
-            dt = 1/target_speed
-            while _running[]
-                time_elapsed = @elapsed fn(t, dt)
-                regression_factor = 1 - time_elapsed*target_speed
-                dt = Int(2 - ceil(regression_factor)) / target_speed
-                t += dt
-                sleep(max(regression_factor/target_speed, 0.0))
-            end
-        end
-        push!(_loops, loop)
+update!(obj::AbstractObject; kwargs...) = nothing
+render!(window::Window, obj::AbstractObject; kwargs...) = nothing
+
+# Events
+
+struct Event
+    data::Array{UInt8}
+end
+Event() = Event(zeros(56))
+
+function bitcat(::Type{T}, arr)::T where T<:Number
+    out = zero(T)
+    for x in arr
+        out <<= sizeof(x)*8
+        out |= convert(T, x)
     end
-    return nothing
+    out
 end
 
-function renderloop(fn::Function; target_fps::Real = 60.0)
-    if _running[]
-        @error "Cannot setup render loop while running"
-    else
-        loop = @task begin
-            frame = 1
-            actual_fps = target_fps
-            while _running[]
-                t = @elapsed for _ in 1:ceil(target_fps)
-                    time_elapsed = @elapsed fn(frame, actual_fps)
-                    sleep(max(1/target_fps - time_elapsed, 0.0))
-                end
-                actual_fps = 1 / t
-            end
-        end
-        push!(_loops, loop)
-    end
-    return nothing
-end
+eventtype(e::Event) = bitcat(UInt32, e.data[4:-1:1])
 
-function run()
-    if _running[]
-        @info "Already running, ignoring"
-    else
-        _running[] = true
-        schedule.(_loops)
-    end
-end
-
-function stop()
-    if !_running[]
-        @info "Already stopped, ignoring"
-    else
-        _running[] = false
-        for loop in _loops
-            wait(loop)
-            pop!(_loops, loop)
-        end
-    end
+handleevent(::Val, e::Event) = nothing
+function handleevent(::Val{SDL.QUIT}, e::Event)
+    println("Quit!")
 end
 
 include("graphics.jl")
+include("mouse.jl")
 
 end # module
