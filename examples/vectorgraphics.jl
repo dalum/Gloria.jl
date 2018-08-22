@@ -1,49 +1,68 @@
 module VectorGraphics
 
-using Gloria: Gloria, Window, AbstractObject
+import Gloria: onevent!, render!, update!
+
+using Gloria: Gloria, AbstractObject, Scene, Window
 using Gloria.Graphics: Texture
+using Gloria.Events: Event
 Gloria.init()
 
-struct World <: AbstractObject
-    objects::Vector{AbstractObject}
-end
+using Colors: @colorant_str
+
+struct Controls <: AbstractObject end
 
 mutable struct Object <: AbstractObject
+    texture::Gloria.Graphics.Texture
     x::Float64
     y::Float64
+    vx::Float64
+    vy::Float64
     θ::Float64
-    texture::Gloria.Graphics.Texture
+    ω::Float64
 end
-Object(x, y, θ, fname::String) = Object(x, y, θ, Texture(window, fname))
+Object(fname::String, args...) = Object(Texture(window, fname), args...)
+
+function onevent!(::Controls, ::Val{:mousemotion}, e::Event)
+    if Gloria.Mouse.getmousestate().left
+        scene.camera_x -= e.rel_x
+        scene.camera_y -= e.rel_y
+    end
+end
+
+function onevent!(::Controls, ::Val{:mousebutton_down}, e::Event)
+    e.button == 1 && Gloria.Mouse.setrelative(true)
+end
+
+function onevent!(::Controls, ::Val{:mousebutton_up}, e::Event)
+    e.button == 1 && Gloria.Mouse.setrelative(false)
+end
+
+function update!(obj::Object; dt, args...)
+    obj.θ += obj.ω*dt
+    obj.x += obj.vx*dt
+    obj.y += obj.vy*dt
+    abs(obj.x) > width / 2 && (obj.vx *= -1; obj.ω *= -1; obj.x += obj.vx*dt)
+    abs(obj.y) > height / 2 && (obj.vy *= -1; obj.ω *= -1; obj.y += obj.vy*dt)
+end
+
+function render!(window::Window, obj::Object; args...)
+    render!(window, obj.texture, obj.x, obj.y, obj.θ)
+end
+
+# Setup
 
 const width, height = 800, 600
-const window = Window("Vector Graphics", (width, height), target_fps=30.0, target_speed=60.0, fullscreen=false)
-const world = World(AbstractObject[Object(rand(1:width), rand(1:height), rand(1:360), abspath(@__DIR__, "assets", "sample.svg")) for _ in 1:100])
-push!(window.scene_stack[end].objects, world)
+const window = Window("Vector Graphics", width, height, target_fps=60.0, target_speed=60.0)
+const scene = Scene()
 
-function Gloria.update!(world::World; args...)
-    for obj in world.objects
-        Gloria.update!(obj; args...)
-    end
-end
+push!(scene, Controls())
+append!(scene, [Object(abspath(@__DIR__, "assets", "sample.svg"),
+                       (rand() - 0.5)*width, (rand() - 0.5)*height,
+                       (rand() - 0.5)*width, (rand() - 0.5)*height,
+                       rand()*360, (rand() - 0.5)*1080) for _ in 1:50])
 
-function Gloria.update!(obj::Object; args...)
-    obj.θ += 180*args[:dt]
-end
+push!(window, scene)
 
-function Gloria.render!(window::Window, world::World; args...)
-    Gloria.Graphics.setcolor!(window, 100, 100, 100, 255)
-    Gloria.Graphics.clear!(window)
-    for obj in world.objects
-        Gloria.render!(window, obj; args...)
-    end
-    Gloria.Graphics.present!(window)
-end
-
-function Gloria.render!(window::Window, obj::Object; args...)
-    Gloria.render!(window, obj.texture, obj.x, obj.y, obj.θ)
-end
-
-Gloria.start(keepalive = true)
+Gloria.start(keepalive=false)
 
 end # module

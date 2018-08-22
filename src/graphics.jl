@@ -2,7 +2,9 @@ module Graphics
 
 import Gloria: render!
 
-using Gloria: AbstractResource, SDL, Window
+using Gloria: AbstractResource, AbstractScene, SDL, Window
+
+using Colors
 using Cairo
 using Rsvg
 
@@ -16,28 +18,25 @@ end
 
 function Texture(window::Window, fname::String, args...)
     if fname in keys(window.resources)
-        @info "re-using resource: \"$fname\""
-        return window.resources[fname]
+        @debug "resource already loaded: \"$fname\""
+        return window.resources[fname]::Texture
     end
 
     for ext in [:svg]
         if match(Regex(".*\\.$ext"), fname) !== nothing
-            return Texture(Val{ext}, window, fname, args...)
+            return Texture(Val(ext), window, fname, args...)
         end
     end
     error("file extension did not match a supported file type")
 end
 
-function Texture(::Type{Val{:svg}}, window::Window, fname::String)
+function Texture(::Val{:svg}, window::Window, fname::String)
     rsvg_handle = Rsvg.handle_new_from_file(fname)
     Int(rsvg_handle.ptr) == 0 && error("'$(fname)' is not a valid SVG file")
 
     rsvg_dim = Rsvg.handle_get_dimensions(rsvg_handle)
-    # hypotenuse = Int(ceil(hypot(rsvg_dim.width, rsvg_dim.height)))
     cairo_surface = Cairo.CairoImageSurface(fill(UInt32(0), (rsvg_dim.height, rsvg_dim.width)), Cairo.FORMAT_ARGB32)
     cairo_context = Cairo.CairoContext(cairo_surface)
-    # Cairo.translate(cairo_context, (hypotenuse - rsvg_dim.width)/2, (hypotenuse - rsvg_dim.height)/2)
-    # Cairo.translate(cairo_context, 100.0, 100.0)
     Rsvg.handle_render_cairo(cairo_context, rsvg_handle)
     Cairo.destroy(cairo_context)
 
@@ -60,43 +59,59 @@ function destroy!(texture::Texture)
     return nothing
 end
 
-# struct VectorGraphics
-#     width::Int
-#     height::Int
-#     hypotenuse::Int
-#     handle::Rsvg.RsvgHandle
-#     surface::Cairo.CairoSurface
-# end
+"""
+transformpoint(window::Window, scene::AbstractScene, x, y)
 
-# """
+Return the coordinates `x` and `y` transformed from the coordinates of
+`scene` in the context of `window` to the coordinates of the renderer.
 
-# Create a VectorGraphics object from an SVG file and pad it with
-# whitespace to allow rotations.
+"""
+transformpoint(window::Window, scene::AbstractScene, x, y) = (window.width // 2 + x - scene.camera_x, window.height // 2 - y + scene.camera_y)
 
-# """
-# function VectorGraphics(fname::String)
-#     handle = Rsvg.handle_new_from_file(fname)
-#     Int(handle.ptr) == 0 && error("'$(fname)' is not a valid SVG file")
-#     dim = Rsvg.handle_get_dimensions(handle)
-#     hypotenuse = Int(ceil(hypot(dim.width, dim.height)))
-#     surface = Cairo.CairoImageSurface(fill(UInt32(0), (hypotenuse, hypotenuse)), Cairo.FORMAT_ARGB32)
-#     return VectorGraphics(dim.width, dim.height, hypotenuse, handle, surface)
-# end
+"""
+transformview(window::Window, scene::AbstractScene, x, y)
 
-# function render!(svg::VectorGraphics; rotate::Real = 0.0)
-#     svg.surface.data .= 0x00_00_00_00
-#     context = Cairo.CairoContext(svg.surface)
-#     Cairo.translate(context, (svg.hypotenuse - svg.width)/2, (svg.hypotenuse - svg.height)/2)
-#     Cairo.translate(context, svg.width/2, svg.height/2)
-#     Cairo.rotate(context, rotate)
-#     Cairo.translate(context, -svg.width/2, -svg.height/2)
-#     Rsvg.handle_render_cairo(context, svg.handle)
-#     # Cairo.destroy(surface)
-#     Cairo.destroy(context)
-# end
+Return the coordinates `x` and `y` relative to the view of `scene` in
+the context of `window` to the coordinates of the renderer.
 
+"""
+transformview(window::Window, scene::AbstractScene, x, y) = (x - window.width // 2, window.height // 2 - y)
+
+"""
+transformrelative(window::Window, scene::AbstractScene, rel_x, rel_y)
+
+Return the relative coordinates `rel_x` and `rel_y` transformed from
+the coordinates of `scene` in the context of `window` to the
+coordinates of the renderer.
+
+"""
+transformrelative(window::Window, scene::AbstractScene, rel_x, rel_y) = (rel_x, -rel_y)
+
+"""
+transformangle(window::Window, scene::AbstractScene, θ)
+
+Return the angle `θ` transformed from the coordinates of `scene` in
+the context of `window` to an angle in the coordinates of the
+renderer.
+
+"""
+transformangle(window::Window, scene::AbstractScene, θ) = -θ
+
+"""
+
+Set the color for drawing operations on `window`.
+
+"""
 setcolor!(window::Window, r::Int, g::Int, b::Int, a::Int) = SDL.SetRenderDrawColor(window.render_ptr, r, g, b, a)
+setcolor!(window::Window, color::Colors.Color) = setcolor!(window, Int(round(color.r * 255)), Int(round(color.g * 255)), Int(round(color.b * 255)), Int(round(color.alpha * 255)))
+setcolor!(window::Window, color::Colors.Color3) = setcolor!(window, color, 255)
+setcolor!(window::Window, color::Colors.Color3, a::Int) = setcolor!(window, Int(round(color.r * 255)), Int(round(color.g * 255)), Int(round(color.b * 255)), a)
 
+"""
+
+Fill `window` with the currently selected color.
+
+"""
 clear!(window::Window) = SDL.RenderClear(window.render_ptr)
 
 """
@@ -109,6 +124,7 @@ Render `texture` onto `window`'s surface with the texture centered at `x` and `y
 render!(window::Window, texture::Texture, x, y, args...) = render!(window, texture, Int(round(x)), Int(round(y)), args...)
 
 function render!(window::Window, texture::Texture, x::Int, y::Int)
+    x, y = Int.(round.(transformpoint(window, window.scene_stack[end], x, y)))
     center_x, center_y = texture.center_x, texture.center_y
     rect = SDL.Rect(x - center_x, y - center_y, texture.width, texture.height)
     GC.@preserve rect SDL.RenderCopy(window.render_ptr, texture.ptr, C_NULL, pointer_from_objref(rect))
@@ -116,6 +132,8 @@ function render!(window::Window, texture::Texture, x::Int, y::Int)
 end
 
 function render!(window::Window, texture::Texture, x::Int, y::Int, θ::Float64, offset_x::Int = 0, offset_y::Int = 0, flip::Symbol = :none)
+    x, y = Int.(round.(transformpoint(window, window.scene_stack[end], x, y)))
+    θ = transformangle(window, window.scene_stack[end], θ)
     center_x, center_y = texture.center_x + offset_x, texture.center_y + offset_y
     rect = SDL.Rect(x - center_x, y - center_y, texture.width, texture.height)
     point = SDL.Point(center_x, center_y)
