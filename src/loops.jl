@@ -121,7 +121,7 @@ end
 
 function render!(window::Window, layer::Layer; frame::Int, fps::Float64)
     if layer.show
-        sort!(layer.objects, by=layer.sortby)
+        # sort!(layer.objects, by=layer.sortby)
         for obj in layer.objects
             render!(layer, obj, frame=frame, fps=fps)
         end

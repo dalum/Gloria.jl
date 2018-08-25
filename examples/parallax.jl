@@ -21,8 +21,10 @@ Object(fname::String, args...) = Object(Texture(window, fname), args...)
 
 function onevent!(::Controls, ::Val{:mousemotion}, e::Event)
     if Gloria.getmousestate().left
-        scene.center_x -= e.rel_x
-        scene.center_y -= e.rel_y
+        for layer in [object_layer1, object_layer2, object_layer3]
+            layer.origin_x += e.rel_x * layer.scale
+            layer.origin_y += e.rel_y * layer.scale
+        end
     end
     if Gloria.getmousestate().right
         for layer in scene.layers
@@ -32,11 +34,11 @@ function onevent!(::Controls, ::Val{:mousemotion}, e::Event)
 end
 
 function onevent!(::Controls, ::Val{:mousebutton_down}, e::Event)
-    e.button == 1 && Gloria.setrelative(true)
+    e.button == 1 && Gloria.setrelativemousemode!(true)
 end
 
 function onevent!(::Controls, ::Val{:mousebutton_up}, e::Event)
-    e.button == 1 && Gloria.setrelative(false)
+    e.button == 1 && Gloria.setrelativemousemode!(false)
 end
 
 function update!(obj::Object; dt, args...)
@@ -48,26 +50,22 @@ function update!(obj::Object; dt, args...)
 end
 
 function render!(layer::Layer, obj::Object; args...)
-    render!(layer, obj.texture, Int(round(obj.x)), Int(round(obj.y)), angle=obj.θ)
+    render!(layer, obj.texture, obj.x, obj.y, angle=obj.θ)
 end
 
 # Setup
 
 const width, height = 800, 600
-const window = Window{Scene}("Parallax", width, height)
-const scene = Scene{Layer}()
-const controls_layer = Layer{Controls}(obj->0, show=false)
-const object_layer1 = Layer{Object}(obj->0, scale=0.5)
-const object_layer2 = Layer{Object}(obj->0, scale=1.0)
-const object_layer3 = Layer{Object}(obj->0, scale=2.0)
+const controls_layer = Layer([Controls()], show=false)
+const object_layer1 = Layer(Object[], width/2, height/2, [1. 0.; 0. -1.], scale=.3)
+const object_layer2 = Layer(Object[], width/2, height/2, [0. 1.; 1. 0.], scale=.5)
+const object_layer3 = Layer(Object[], width/2, height/2, [1. 0.; 0. -1.], scale=1.)
+const scene = Scene(controls_layer, object_layer1, object_layer2, object_layer3)
+const window = Window("Parallax", width, height, scene)
 
-push!(controls_layer, Controls())
-append!(object_layer1, [Object(abspath(@__DIR__, "assets", "sample.svg"), 100.0i, 0.0, 0.0, 0.0, rand()*360, rand()*(360 - 180)) for i in 1:10])
-append!(object_layer2, [Object(abspath(@__DIR__, "assets", "sample.svg"), 100.0i, 0.0, 0.0, 0.0, rand()*360, rand()*(360 - 180)) for i in 1:10])
-append!(object_layer3, [Object(abspath(@__DIR__, "assets", "sample.svg"), 100.0i, 0.0, 0.0, 0.0, rand()*360, rand()*(360 - 180)) for i in 1:10])
-
-push!(scene, controls_layer, object_layer1, object_layer2, object_layer3)
-push!(window, scene)
+append!(object_layer1, [Object(abspath(@__DIR__, "assets", "sample.svg"), 100.0i, 20.0i, 0.0, 0.0, rand()*360, rand()*(360 - 180)) for i in 0:10])
+append!(object_layer2, [Object(abspath(@__DIR__, "assets", "sample.svg"), 100.0i, 20.0i, 0.0, 0.0, rand()*360, rand()*(360 - 180)) for i in 0:10])
+append!(object_layer3, [Object(abspath(@__DIR__, "assets", "sample.svg"), 100.0i, 0.0, 0.0, 0.0, rand()*360, rand()*(360 - 180)) for i in 0:10])
 
 Gloria.run!(window, target_render_speed = 60.0, target_update_speed = 60.0)
 # wait(window)
