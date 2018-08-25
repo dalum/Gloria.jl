@@ -1,16 +1,9 @@
-module Mouse
-
-import Gloria.Events: parseevent
-using Gloria: SDL, Window
-using Gloria.Events: geteventdata
-using Gloria.Graphics: transformview, transformrelative
-
 setrelative(val::Bool) = SDL.SetRelativeMouseMode(val)
 
 function getmousestate()
     x, y = Int[0], Int[0]
     mask = SDL.GetMouseState(pointer(x), pointer(y))
-    return (x = x[], y = y[], left = (mask & SDL.BUTTON_LEFT != 0)::Bool, middle = (mask & SDL.BUTTON_MIDDLE != 0)::Bool, right = (mask & SDL.BUTTON_RIGHT != 0)::Bool)
+    return (x = x[], y = y[], left = (mask & 1 != 0)::Bool, middle = (mask & 2 != 0)::Bool, right = (mask & 4 != 0)::Bool)
 end
 
 function parseevent(window::Window, ::Val{SDL.MOUSEMOTION}, data::Vector{UInt8})
@@ -54,5 +47,3 @@ end
 
 # buttondown(button, x, y) = nothing
 # buttonup(button, x, y) = nothing
-
-end #module

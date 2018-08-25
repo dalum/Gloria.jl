@@ -1,4 +1,4 @@
-module VectorGraphics
+module Parallax
 
 import Gloria: onevent!, render!, update!
 
@@ -24,6 +24,11 @@ function onevent!(::Controls, ::Val{:mousemotion}, e::Event)
         scene.center_x -= e.rel_x
         scene.center_y -= e.rel_y
     end
+    if Gloria.getmousestate().right
+        for layer in scene.layers
+            layer.scale *= 1.001^e.rel_y
+        end
+    end
 end
 
 function onevent!(::Controls, ::Val{:mousebutton_down}, e::Event)
@@ -38,29 +43,30 @@ function update!(obj::Object; dt, args...)
     obj.θ += obj.ω*dt
     obj.x += obj.vx*dt
     obj.y += obj.vy*dt
-    abs(obj.x) > width / 2 && (obj.vx *= -1; obj.ω *= -1; obj.x += obj.vx*dt)
-    abs(obj.y) > height / 2 && (obj.vy *= -1; obj.ω *= -1; obj.y += obj.vy*dt)
+    # abs(obj.x) > width / 2 && (obj.vx *= -1; obj.ω *= -1; obj.x += obj.vx*dt)
+    # abs(obj.y) > height / 2 && (obj.vy *= -1; obj.ω *= -1; obj.y += obj.vy*dt)
 end
 
 function render!(layer::Layer, obj::Object; args...)
-    render!(layer, obj.texture, obj.x, obj.y, angle=obj.θ)
+    render!(layer, obj.texture, Int(round(obj.x)), Int(round(obj.y)), angle=obj.θ)
 end
 
 # Setup
 
 const width, height = 800, 600
-const window = Window{Scene}("Vector Graphics", width, height)
+const window = Window{Scene}("Parallax", width, height)
 const scene = Scene{Layer}()
-const controls_layer = Layer{Object}(obj->0, show=false)
-const object_layer = Layer{Object}(obj->obj.x)
+const controls_layer = Layer{Controls}(obj->0, show=false)
+const object_layer1 = Layer{Object}(obj->0, scale=0.5)
+const object_layer2 = Layer{Object}(obj->0, scale=1.0)
+const object_layer3 = Layer{Object}(obj->0, scale=2.0)
 
 push!(controls_layer, Controls())
-append!(object_layer, [Object(abspath(@__DIR__, "assets", "sample.svg"),
-                              (rand() - 0.5)*width, (rand() - 0.5)*height,
-                              (rand() - 0.5)*width, (rand() - 0.5)*height,
-                              rand()*360, (rand() - 0.5)*1080) for _ in 1:50])
+append!(object_layer1, [Object(abspath(@__DIR__, "assets", "sample.svg"), 100.0i, 0.0, 0.0, 0.0, rand()*360, rand()*(360 - 180)) for i in 1:10])
+append!(object_layer2, [Object(abspath(@__DIR__, "assets", "sample.svg"), 100.0i, 0.0, 0.0, 0.0, rand()*360, rand()*(360 - 180)) for i in 1:10])
+append!(object_layer3, [Object(abspath(@__DIR__, "assets", "sample.svg"), 100.0i, 0.0, 0.0, 0.0, rand()*360, rand()*(360 - 180)) for i in 1:10])
 
-push!(scene, controls_layer, object_layer)
+push!(scene, controls_layer, object_layer1, object_layer2, object_layer3)
 push!(window, scene)
 
 Gloria.run!(window, target_render_speed = 60.0, target_update_speed = 60.0)

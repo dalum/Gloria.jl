@@ -1,10 +1,3 @@
-module Graphics
-
-import Gloria: render!
-
-using Gloria: AbstractResource, AbstractScene, SDL, Window
-
-using Colors
 using Cairo
 using Rsvg
 
@@ -66,7 +59,7 @@ Return the coordinates `x` and `y` transformed from the coordinates of
 `scene` in the context of `window` to the coordinates of the renderer.
 
 """
-transformpoint(window::Window, scene::AbstractScene, x, y) = (window.width // 2 + x - scene.camera_x, window.height // 2 - y + scene.camera_y)
+transformpoint(window::Window, scene::AbstractScene, x, y; scale = 1.0) = (window.width // 2 + (x - scene.center_x)*scale, window.height // 2 - (y + scene.center_y)*scale)
 
 """
 transformview(window::Window, scene::AbstractScene, x, y)
@@ -147,6 +140,36 @@ function render!(window::Window, texture::Texture, x::Int, y::Int, θ::Float64, 
     return window
 end
 
+function render!(window::Window, render_task::RenderTask{Texture})
+    texture = render_task.source
+    scale = render_task.scale
+    x, y = Int.(round.(transformpoint(window, window.scene_stack[end], render_task.x, render_task.y, scale=scale)))
+    angle = transformangle(window, window.scene_stack[end], render_task.angle)
+    center_x, center_y = Int(round(render_task.source.center_x*scale)), Int(round(render_task.source.center_y*scale))
+    flip = UInt32(render_task.flip === :horizontal ? SDL.FLIP_HORIZONTAL :
+                  render_task.flip === :vertical ? SDL.FLIP_VERTICAL :
+                  SDL.FLIP_NONE)
+    rect = SDL.Rect(x - center_x, y - center_y,
+                    Int(round(texture.width*scale)),
+                    Int(round(texture.height*scale)))
+    point = SDL.Point(center_x, center_y)
+    GC.@preserve rect point SDL.RenderCopyEx(window.render_ptr, texture.ptr,
+                                             C_NULL, pointer_from_objref(rect),
+                                             angle, pointer_from_objref(point), flip)
+    return window
+end
+
+render!(layer::Layer, texture::Texture, x, y; args...) = render!(layer, texture, Int(round(x)), Int(round(y)); args...)
+
+function render!(layer::Layer, texture::Texture, x::Int, y::Int; scale::Float64 = 1.0, angle::Float64 = 0.0, flip::Symbol = :none)
+    x = convert(Int, round(cos(layer.angle) * x - sin(layer.angle) * y + layer.origin_x))::Int
+    y = convert(Int, round(sin(layer.angle) * x + cos(layer.angle) * y + layer.origin_y))::Int
+    scale = convert(Float64, scale*layer.scale)::Float64
+    angle = convert(Float64, angle + layer.angle)::Float64
+    push!(layer._render_tasks, RenderTask(texture, x, y, scale, angle, flip))
+    return layer
+end
+
 """
 """
 function drawrect!(window::Window, x::Int, y::Int, w::Int, h::Int)
@@ -174,5 +197,3 @@ drawpoint!(window::Window, (x, y)::Tuple{Int,Int}) = SDL.RenderDrawPoint(window.
 """
 """
 present!(window::Window) = SDL.RenderPresent(window.render_ptr)
-
-end

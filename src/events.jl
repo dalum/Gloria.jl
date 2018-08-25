@@ -1,7 +1,3 @@
-module Events
-
-using Gloria: SDL, Window
-
 struct Event
     fields::Dict{Symbol, Any}
 end
@@ -36,6 +32,11 @@ eventtype(data::Vector{UInt8}) = bitcat(UInt32, data[4:-1:1])
 parseevent(window::Window, data::Vector{UInt8}) = parseevent(window, Val(eventtype(data)), data)
 parseevent(window::Window, ::Val, data::Vector{UInt8}) = (:notsupported, Event())
 
+function parseevent(window::Window, ::Val{SDL.QUIT}, data::Vector{UInt8})
+    e = geteventdata(data, :type => UInt32, :timestamp => UInt32)
+    return (:quit, e)
+end
+
 # handleevent(::Val, e::Event) = nothing
 # function handleevent(::Val{SDL.QUIT}, e::Event)
 #     for window in _windows
@@ -44,5 +45,3 @@ parseevent(window::Window, ::Val, data::Vector{UInt8}) = (:notsupported, Event()
 #         end
 #     end
 # end
-
-end
