@@ -95,7 +95,12 @@ Base.show(io::IO, layer::Layer) = print(io, "Layer(", join([layer.objects, layer
 Block the current task until `window` has finished executing.
 
 """
-Base.wait(window::Window) = wait.(window.tasks)
+function Base.wait(window::Window)
+    for task in window.tasks
+        wait(task)
+    end
+    return nothing
+end
 
 """
     size(window::Window)

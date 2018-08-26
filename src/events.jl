@@ -36,12 +36,3 @@ function parseevent(window::Window, ::Val{SDL.QUIT}, data::Vector{UInt8})
     e = geteventdata(data, :type => UInt32, :timestamp => UInt32)
     return (:quit, e)
 end
-
-# handleevent(::Val, e::Event) = nothing
-# function handleevent(::Val{SDL.QUIT}, e::Event)
-#     for window in _windows
-#         while length(window.scene_stack) > 0
-#             pop!(window.scene_stack)
-#         end
-#     end
-# end

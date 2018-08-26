@@ -20,11 +20,10 @@ abstract type AbstractResource end
 abstract type AbstractObject end
 
 include("window.jl")
-const _windows = Window[]
-
 include("events.jl")
 include("loops.jl")
 include("graphics.jl")
 include("mouse.jl")
+include("keyboard.jl")
 
 end # module

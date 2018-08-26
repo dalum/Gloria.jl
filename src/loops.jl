@@ -49,7 +49,7 @@ function _renderloop(window::Window, target_speed::Float64)
 end
 
 """
-run!(window::Window; args...)
+    run!(window::Window; args...)
 
 Execute `window`.
 
@@ -60,18 +60,20 @@ function run!(window::Window; target_event_speed::Float64 = 100.0, target_update
     return window
 end
 
-function onevent!(::AbstractObject, ::Val, ::Event) end
-function update!(::AbstractObject; args...) end
-function render!(::Window, ::AbstractObject; args...) end
-
-onevent!(window::Window, ::Val{:notsupported}, ::Event) = window
-onevent!(window::Window, val::Val, e::Event) = onevent!(window.scene_stack[end], val, e)
-
 struct InterruptQuit end
-function onevent!(window::Window, val::Val{:quit}, e::Event)
+
+"""
+    quit!(window::Window, e::Event)
+
+Gracefully quit `window`, propagating the event, `e`, which caused
+`quit!` to be called to each scene in `window` to allow processing and
+optionally interrupting the call by returning `InterruptQuit()`.
+
+"""
+function quit!(window::Window, e::Event)
     while length(window.scene_stack) > 0
         scene = pop!(window)
-        if onevent!(scene, val, e) === InterruptQuit()
+        if onevent!(scene, Val(:quit), e) === InterruptQuit()
             push!(window, scene)
             return InterruptQuit()
         end
@@ -79,8 +81,16 @@ function onevent!(window::Window, val::Val{:quit}, e::Event)
     destroy!(window)
 end
 
-update!(window::Window; t::Float64, dt::Float64) = update!(window.scene_stack[end], t=t, dt=dt)
-render!(window::Window; frame::Int, fps::Float64) = render!(window, window.scene_stack[end], frame=frame, fps=fps)
+function onevent!(::AbstractObject, ::Val, ::Event) end
+function update!(::AbstractObject; args...) end
+function render!(::Window, ::AbstractObject; args...) end
+
+onevent!(window::Window, ::Val{:notsupported}, ::Event) = window
+onevent!(window::Window, val::Val, e::Event) = length(window.scene_stack) > 0 ? onevent!(window.scene_stack[end], val, e) : nothing
+onevent!(window::Window, val::Val{:quit}, e::Event) = quit!(window, e)
+
+update!(window::Window; t::Float64, dt::Float64) = length(window.scene_stack) > 0 ? update!(window.scene_stack[end], t=t, dt=dt) : nothing
+render!(window::Window; frame::Int, fps::Float64) = length(window.scene_stack) > 0 ? render!(window, window.scene_stack[end], frame=frame, fps=fps) : nothing
 
 function onevent!(scene::Scene, val::Val, e::Event)
     for layer in scene.layers
