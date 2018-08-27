@@ -79,10 +79,25 @@ function main()
 end
 
 # precompile
-import Cairo, Compat, DelimitedFiles, LinearAlgebra, Logging, Random, Rsvg, SimpleDirectMediaLayer
-for fname in filter(x->occursin(r"^precompile_.*\.jl$", x), readdir(abspath(@__DIR__, "..", "precompile")))
-    include(abspath(@__DIR__, "..", "precompile", fname))
-    _precompile_()
+const dir = abspath(@__DIR__, "..", "precompile")
+const blacklist_import = [:Parallax, :unknown]
+const fnames = collect(filter(x->occursin(r"^precompile_.*\.jl$", x), readdir(dir)))
+const names = (fname->Symbol(match(r"^precompile_(.*)\.jl$", fname)[1])).(fnames)
+for name in names
+    name in blacklist_import && continue
+    try
+        @eval import $name
+    catch e
+        @warn "Failed import of: $name ($e)"
+    end
+end
+for fname in fnames
+    try
+        include(joinpath(dir, fname))
+        _precompile_()
+        catch e
+        @warn "Failed additional precompilation of: $fname ($e)"
+    end
 end
 
 end # module

@@ -2,8 +2,8 @@ using SnoopCompile
 
 ### Log the compiles
 # This only needs to be run once (to generate "/tmp/images_compiles.csv")
-SnoopCompile.@snoop1 abspath(@__DIR__, "compiles.csv") begin
-    include(abspath(@__DIR__, "..", "parallax.jl"))
+SnoopCompile.@snoop ["--project"] abspath(@__DIR__, "compiles.csv") begin
+    include(abspath(@__DIR__, "..", "run.jl"))
 end
 
 ### Parse the compiles and generate precompilation scripts
