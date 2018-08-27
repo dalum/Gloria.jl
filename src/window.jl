@@ -52,7 +52,7 @@ mutable struct Scene{T <: AbstractVector{<:AbstractLayer}} <: AbstractScene
     color::Colors.RGB
 end
 
-Scene(layer::AbstractLayer, layers::AbstractLayer...) = Scene([layer, layers...])
+Scene(layer::AbstractLayer, layers::AbstractLayer...; color=Colors.colorant"dark gray") = Scene([layer, layers...], color)
 Scene(layers::T) where {T<:AbstractVector{<:AbstractLayer}} = Scene(layers, Colors.colorant"dark gray")
 
 struct RenderTask{T <: AbstractResource}

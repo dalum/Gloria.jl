@@ -15,3 +15,6 @@ function parseevent(window::Window, ::Val{SDL.KEYUP}, data::Vector{UInt8})
                      :keycode => UInt32, :mod => UInt16)
     return (:key_up, e)
 end
+
+include("scancodes.jl")
+include("keycodes.jl")
