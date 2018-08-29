@@ -94,9 +94,9 @@ version = "0.19.0"
 
 [[LibCURL]]
 deps = ["BinaryProvider", "Compat", "Libdl", "Pkg"]
-git-tree-sha1 = "f7c4fd37291207ec6bd4b7b9abfc512d4bb8b88e"
+git-tree-sha1 = "13cace3a2a2e76de68024c0b2c1a1bf00ee81b88"
 uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
-version = "0.3.1"
+version = "0.3.2"
 
 [[LibExpat]]
 deps = ["Compat", "Pkg"]
@@ -166,17 +166,15 @@ version = "0.2.0"
 
 [[Revise]]
 deps = ["Distributed", "FileWatching", "InteractiveUtils", "LibGit2", "OrderedCollections", "Pkg", "REPL", "Random", "Test", "UUIDs", "Unicode"]
-git-tree-sha1 = "97ad3c4ad52b692ae1e0f54b17c517e7c20916e0"
+git-tree-sha1 = "025554330a00f4475946a4d3ffaa1f47755be6e6"
 uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
-version = "0.7.2"
+version = "0.7.3"
 
 [[Rsvg]]
-deps = ["BinDeps", "Cairo", "Compat", "Homebrew", "Libdl", "WinRPM"]
+deps = ["BinDeps", "Cairo", "Compat", "Homebrew", "Libdl", "Pkg", "WinRPM"]
 git-tree-sha1 = "d5ca7342f2dfad5f22d329b29519548a3166efee"
-repo-rev = "master"
-repo-url = "https://github.com/lobingera/Rsvg.jl.git"
 uuid = "c4c386cf-5103-5370-be45-f3a111cca3b8"
-version = "0.2.1+"
+version = "0.2.2"
 
 [[SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
@@ -189,18 +187,16 @@ deps = ["Distributed", "Mmap", "Random", "Serialization"]
 uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
 
 [[SimpleDirectMediaLayer]]
-deps = ["BinDeps", "ColorTypes", "Compat", "Homebrew", "Libdl", "Test"]
-git-tree-sha1 = "9c0efe353d7f54ce56d42c5f33aca23ce5317190"
-repo-rev = "master"
-repo-url = "https://github.com/jonathanBieler/SimpleDirectMediaLayer.jl.git"
+deps = ["BinDeps", "ColorTypes", "Compat", "Homebrew", "InteractiveUtils", "Libdl", "Pkg", "Test"]
+git-tree-sha1 = "7b88f06ea913fdc388bd664eaf002dd10a77bd8e"
 uuid = "98e33af6-2ee5-5afd-9e75-cbc738b767c4"
-version = "0.0.2+"
+version = "0.1.0"
 
 [[SnoopCompile]]
 deps = ["Pkg", "Serialization", "Test"]
-path = "/home/evey/.julia/dev/SnoopCompile"
+git-tree-sha1 = "003e7082e21bf70bf2a62bddd9480cabf44e151f"
 uuid = "aa65fe97-06da-5843-b5b1-d5d13cad87d2"
-version = "0.2.0+"
+version = "0.3.0"
 
 [[Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
@@ -232,6 +228,6 @@ uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 
 [[WinRPM]]
 deps = ["BinDeps", "Compat", "HTTPClient", "LibExpat", "Libdl", "Libz", "SHA", "URIParser"]
-git-tree-sha1 = "023faa2430b4ad3f9cf073c03cf100d80630fb6d"
+git-tree-sha1 = "3ff6d7ad07dc216d5fc8e70ac994a6d6bb46347c"
 uuid = "c17dfb99-b4f7-5aad-8812-456da1ad7187"
-version = "0.4.0"
+version = "0.4.1"
