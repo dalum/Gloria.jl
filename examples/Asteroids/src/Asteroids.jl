@@ -40,6 +40,9 @@ function update!(obj::Player; t::Float64, dt::Float64)
     obj.θ += obj.ω*dt
     obj.x += obj.vx*dt
     obj.y += obj.vy*dt
+
+    abs(obj.x) > (width / 2 + 50) && (obj.x = -obj.x)
+    abs(obj.y) > (height / 2 + 50) && (obj.y = -obj.y)
 end
 
 function render!(layer::Layer, obj::Player; frame::Int, fps::Float64)
@@ -66,25 +69,25 @@ function main()
 end
 
 # precompile
-# const dir = abspath(@__DIR__, "..", "precompile")
-# const blacklist_import = [:Parallax, :unknown]
-# const fnames = collect(filter(x->occursin(r"^precompile_.*\.jl$", x), readdir(dir)))
-# const names = (fname->Symbol(match(r"^precompile_(.*)\.jl$", fname)[1])).(fnames)
-# for name in names
-#     name in blacklist_import && continue
-#     try
-#         @eval import $name
-#     catch e
-#         @warn "Failed import of: $name ($e)"
-#     end
-# end
-# for fname in fnames
-#     try
-#         include(joinpath(dir, fname))
-#         _precompile_()
-#         catch e
-#         @warn "Failed additional precompilation of: $fname ($e)"
-#     end
-# end
+const dir = abspath(@__DIR__, "..", "precompile")
+const blacklist_import = [:Asteroids, :unknown]
+const fnames = collect(filter(x->occursin(r"^precompile_.*\.jl$", x), readdir(dir)))
+const names = (fname->Symbol(match(r"^precompile_(.*)\.jl$", fname)[1])).(fnames)
+for name in names
+    name in blacklist_import && continue
+    try
+        @eval import $name
+    catch e
+        @warn "Failed import of: $name ($e)"
+    end
+end
+for fname in fnames
+    try
+        include(joinpath(dir, fname))
+        _precompile_()
+        catch e
+        @warn "Failed additional precompilation of: $fname ($e)"
+    end
+end
 
 end # module
