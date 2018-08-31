@@ -1,7 +1,8 @@
 module Asteroids
 
 import Gloria: onevent!, render!, update!
-using Gloria: Gloria, AbstractObject, Event, Layer, Scene, Texture, Window
+using Gloria: Gloria, AbstractObject, Audio, Event, Layer, Scene, Texture, Window,
+    iskey, ispressed, play!
 
 using Colors: @colorant_str
 
@@ -16,28 +17,28 @@ mutable struct Player <: AbstractObject
     a::Float64
     θ::Float64
     ω::Float64
-    α::Float64
 end
 
 function onevent!(::Controls, ::Val{:key_down}, e::Event)
-    if e.scancode == Gloria.SCANCODES["Escape"]
-        Gloria.quit!(window, e)
-    end
+    iskey(e, "escape") && Gloria.quit!(window, e)
+end
+
+function onevent!(::Player, ::Val{:key_down}, e::Event)
+    iskey(e, "space") && play!(laser_sound)
 end
 
 function update!(obj::Player; t::Float64, dt::Float64)
-    state = Gloria.unsafe_getkeyboardstate()
-    if state[Gloria.SCANCODES["Up"] + 1] == 1
+    if ispressed(keyboard, "up")
         obj.vx += obj.a*cos(obj.θ*π/180)*dt
         obj.vy += obj.a*sin(obj.θ*π/180)*dt
     end
-    if state[Gloria.SCANCODES["Left"] + 1] == 1
-        obj.ω += obj.α*dt
+    if ispressed(keyboard, "left")
+        obj.θ += obj.ω*dt
     end
-    if state[Gloria.SCANCODES["Right"] + 1] == 1
-        obj.ω -= obj.α*dt
+    if ispressed(keyboard, "right")
+        obj.θ -= obj.ω*dt
     end
-    obj.θ += obj.ω*dt
+
     obj.x += obj.vx*dt
     obj.y += obj.vy*dt
 
@@ -59,8 +60,11 @@ const object_layer = Layer(Player[], width/2, height/2, [1. 0.; 0. -1.])
 
 const scene = Scene(controls_layer, object_layer, color=colorant"black")
 const window = Window("Asteroids", width, height, scene, fullscreen=false)
+const keyboard = Gloria.KeyboardState()
 
-const player = Player(Texture(window, abspath(@__DIR__, "..", "assets", "player.svg")), 0., 0., 0., 0., 100., 0., 0., 100.)
+const laser_sound = Audio(abspath(@__DIR__, "..", "assets", "laser.wav"), window)
+
+const player = Player(Texture(window, abspath(@__DIR__, "..", "assets", "player.svg")), 0., 0., 0., 0., 100., 0., 180.)
 push!(object_layer, player)
 
 function main()

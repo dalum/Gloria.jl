@@ -3,29 +3,30 @@ using Rsvg
 
 mutable struct Texture <: AbstractResource
     ptr::Ptr{SDL.Texture}
+    fname::String
     width::Int
     height::Int
     center_x::Int
     center_y::Int
 end
 
-function Texture(window::Window, fname::String, args...)
+function Texture(window::Window, fname::String)
     if fname in keys(window.resources)
-        @debug "resource already loaded: \"$fname\""
+        @debug("resource already loaded: '$fname'")
         return window.resources[fname]::Texture
     end
 
-    for ext in [:svg]
-        if match(Regex(".*\\.$ext"), fname) !== nothing
-            return Texture(Val(ext), window, fname, args...)
-        end
-    end
-    error("file extension did not match a supported file type")
+    ptr, width, height = load(query(fname), window)
+
+    self = Texture(ptr, fname, width, height, Int(round(width/2)), Int(round(height/2)))
+    finalizer(destroy!, self)
+    window.resources[fname] = self
+    return self
 end
 
-function Texture(::Val{:svg}, window::Window, fname::String)
-    rsvg_handle = Rsvg.handle_new_from_file(fname)
-    Int(rsvg_handle.ptr) == 0 && error("'$(fname)' is not a valid SVG file")
+function load(f::File{format"SVG"}, window::Window)
+    rsvg_handle = Rsvg.handle_new_from_file(f.filename)
+    Int(rsvg_handle.ptr) == 0 && error("'$(f.filename)' is not a valid SVG file")
 
     rsvg_dim = Rsvg.handle_get_dimensions(rsvg_handle)
     cairo_surface = Cairo.CairoImageSurface(fill(UInt32(0), (rsvg_dim.height, rsvg_dim.width)), Cairo.FORMAT_ARGB32)
@@ -40,15 +41,12 @@ function Texture(::Val{:svg}, window::Window, fname::String)
     texture_ptr = SDL.CreateTextureFromSurface(window.render_ptr, sdl_surface)
     SDL.FreeSurface(sdl_surface)
     Cairo.destroy(cairo_surface)
-
-    self = Texture(texture_ptr, width, height, Int(round(width/2)), Int(round(height/2)))
-    finalizer(destroy!, self)
-    window.resources[fname] = self
-    return self
+    return texture_ptr, width, height
 end
 
-function destroy!(texture::Texture)
-    SDL.DestroyTexture(texture.ptr)
+function destroy!(t::Texture)
+    SDL.DestroyTexture(t.ptr)
+    t.ptr = C_NULL
     return nothing
 end
 

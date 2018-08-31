@@ -1,6 +1,11 @@
-function unsafe_getkeyboardstate()
-    return unsafe_wrap(Array, SDL.GetKeyboardState(C_NULL), 285)
+struct KeyboardState
+    state::Array{UInt8}
+    KeyboardState() = new(unsafe_wrap(Array{UInt8}, SDL.GetKeyboardState(C_NULL), 285))
 end
+
+ispressed(keyboard::KeyboardState, key::String) = keyboard.state[Gloria.SCANCODES[lowercase(key)] + 1] == 1
+iskey(e::Event, key::String; repeat=false) = e.scancode == Gloria.SCANCODES[lowercase(key)] && convert(Bool, e.repeat) == repeat
+iskeycode(e::Event, key::String) = e.keycode == Gloria.KEYCODES[lowercase(key)]
 
 function parseevent(window::Window, ::Val{SDL.KEYDOWN}, data::Vector{UInt8})
     e = geteventdata(data, :type => UInt32, :timestamp => UInt32, :window_id => UInt32,

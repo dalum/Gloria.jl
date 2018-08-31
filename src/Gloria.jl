@@ -5,6 +5,7 @@ module Gloria
 
 using SimpleDirectMediaLayer
 const SDL = SimpleDirectMediaLayer
+using FileIO
 
 function __init__()
     SDL.GL_SetAttribute(SDL.GL_MULTISAMPLEBUFFERS, 1)
@@ -25,5 +26,6 @@ include("loops.jl")
 include("graphics.jl")
 include("mouse.jl")
 include("keyboard.jl")
+include("audio.jl")
 
 end # module
