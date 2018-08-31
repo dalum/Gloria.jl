@@ -39,6 +39,9 @@ function load(f::File{format"SVG"}, window::Window)
                                            width, height, 32, Int32(width*4),
                                            0x00_ff_00_00, 0x00_00_ff_00, 0x00_00_00_ff, 0xff_00_00_00)
     texture_ptr = SDL.CreateTextureFromSurface(window.render_ptr, sdl_surface)
+    if texture_ptr == C_NULL
+        error("failed to create texture from: '$(f.filename)'")
+    end
     SDL.FreeSurface(sdl_surface)
     Cairo.destroy(cairo_surface)
     return texture_ptr, width, height

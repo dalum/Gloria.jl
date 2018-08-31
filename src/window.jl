@@ -12,7 +12,12 @@ mutable struct Window{T <: AbstractVector{<:AbstractScene}}
 
     function Window{T}(title::String, width::Int, height::Int, scene_stack::T = AbstractScene[]; fullscreen::Bool = false) where {T <: AbstractVector{<:AbstractScene}}
         window_ptr = SDL.CreateWindow(title, Int32(SDL.WINDOWPOS_CENTERED_MASK), Int32(SDL.WINDOWPOS_CENTERED_MASK), Int32(width), Int32(height), fullscreen ? SDL.WINDOW_FULLSCREEN : UInt32(0))
-        render_ptr = SDL.CreateRenderer(window_ptr, Int32(-1), UInt32(SDL.RENDERER_ACCELERATED | SDL.RENDERER_PRESENTVSYNC | SDL.RENDERER_TARGETTEXTURE))
+        render_ptr = SDL.CreateRenderer(window_ptr, Int32(-1), UInt32(SDL.RENDERER_TARGETTEXTURE))
+        if render_ptr == C_NULL
+            SDL.DestroyWindow(window_ptr)
+            SDL.DestroyRenderer(render_ptr)
+            error(unsafe_string(SDL.GetError()))
+        end
         SDL.SetRenderDrawBlendMode(render_ptr, SDL.BLENDMODE_BLEND)
         scene_stack = scene_stack
         resources = Dict{String,AbstractResource}()
