@@ -12,7 +12,7 @@ mutable struct Window{T <: AbstractVector{<:AbstractScene}}
 
     function Window{T}(title::String, width::Int, height::Int, scene_stack::T = AbstractScene[]; fullscreen::Bool = false) where {T <: AbstractVector{<:AbstractScene}}
         window_ptr = SDL.CreateWindow(title, Int32(SDL.WINDOWPOS_CENTERED_MASK), Int32(SDL.WINDOWPOS_CENTERED_MASK), Int32(width), Int32(height), fullscreen ? SDL.WINDOW_FULLSCREEN : UInt32(0))
-        render_ptr = SDL.CreateRenderer(window_ptr, Int32(-1), UInt32(SDL.RENDERER_TARGETTEXTURE))
+        render_ptr = SDL.CreateRenderer(window_ptr, Int32(-1), UInt32(0))
         if render_ptr == C_NULL
             SDL.DestroyWindow(window_ptr)
             SDL.DestroyRenderer(render_ptr)
@@ -44,6 +44,17 @@ function Base.getproperty(window::Window, name::Symbol)
     name == :width && return size(window)[1]
     name == :height && return size(window)[2]
     getfield(window, name)
+end
+
+"""
+    delete!(window::Window, filename::String)
+
+Remove the reference to the resource located at `filename` from `window`.
+
+"""
+function delete!(window::Window, filename::String)
+    delete!(window.resources, filename)
+    return window
 end
 
 """

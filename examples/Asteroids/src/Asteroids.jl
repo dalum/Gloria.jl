@@ -42,8 +42,10 @@ function update!(obj::Player; t::Float64, dt::Float64)
     obj.x += obj.vx*dt
     obj.y += obj.vy*dt
 
-    abs(obj.x) > (width / 2 + 50) && (obj.x = -obj.x)
-    abs(obj.y) > (height / 2 + 50) && (obj.y = -obj.y)
+    obj.x > wrap_width / 2 && (obj.x -= wrap_width)
+    obj.x < -wrap_width / 2 && (obj.x += wrap_width)
+    obj.y > wrap_height / 2 && (obj.y -= wrap_height)
+    obj.y < -wrap_height / 2 && (obj.y += wrap_height)
 end
 
 function render!(layer::Layer, obj::Player; frame::Int, fps::Float64)
@@ -54,6 +56,7 @@ end
 
 # const width, height = 1920, 1080
 const width, height = 800, 600
+const wrap_width, wrap_height = width + 50, height + 50
 const controls_layer = Layer([Controls()], show=false)
 
 const object_layer = Layer(Player[], width/2, height/2, [1. 0.; 0. -1.])
@@ -64,7 +67,7 @@ const keyboard = Gloria.KeyboardState()
 
 const laser_sound = Audio(abspath(@__DIR__, "..", "assets", "laser.wav"), window)
 
-const player = Player(Texture(window, abspath(@__DIR__, "..", "assets", "player.svg")), 0., 0., 0., 0., 100., 0., 180.)
+const player = Player(Texture(window, abspath(@__DIR__, "..", "assets", "player.svg"), width=50, height=50), 0., 0., 0., 0., 100., 0., 180.)
 push!(object_layer, player)
 
 function main()
@@ -73,25 +76,25 @@ function main()
 end
 
 # precompile
-const dir = abspath(@__DIR__, "..", "precompile")
-const blacklist_import = [:Asteroids, :unknown]
-const fnames = collect(filter(x->occursin(r"^precompile_.*\.jl$", x), readdir(dir)))
-const names = (fname->Symbol(match(r"^precompile_(.*)\.jl$", fname)[1])).(fnames)
-for name in names
-    name in blacklist_import && continue
-    try
-        @eval import $name
-    catch e
-        @warn "Failed import of: $name ($e)"
-    end
-end
-for fname in fnames
-    try
-        include(joinpath(dir, fname))
-        _precompile_()
-        catch e
-        @warn "Failed additional precompilation of: $fname ($e)"
-    end
-end
+# const dir = abspath(@__DIR__, "..", "precompile")
+# const blacklist_import = [:Asteroids, :unknown]
+# const fnames = collect(filter(x->occursin(r"^precompile_.*\.jl$", x), readdir(dir)))
+# const names = (fname->Symbol(match(r"^precompile_(.*)\.jl$", fname)[1])).(fnames)
+# for name in names
+#     name in blacklist_import && continue
+#     try
+#         @eval import $name
+#     catch e
+#         @warn "Failed import of: $name ($e)"
+#     end
+# end
+# for fname in fnames
+#     try
+#         include(joinpath(dir, fname))
+#         _precompile_()
+#         catch e
+#         @warn "Failed additional precompilation of: $fname ($e)"
+#     end
+# end
 
 end # module
