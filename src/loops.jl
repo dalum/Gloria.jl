@@ -1,6 +1,6 @@
 # Default loops
 function _eventloop(window::Window, target_speed::Float64)
-    @task begin
+    @task try
         t = time()
         event_data = zeros(UInt8, 56)
         while length(window.scene_stack) > 0
@@ -12,11 +12,14 @@ function _eventloop(window::Window, target_speed::Float64)
             t += dt
             sleep(max(1/target_speed - dt - 0.001, 0.0))
         end
+    catch e
+        println("Error in event loop: ", sprint(showerror, e))
+        throw(e)
     end
 end
 
 function _updateloop(window::Window, target_speed::Float64)
-    @task begin
+    @task try
         t0 = time()
         t = t0
         dt = 1/target_speed
@@ -26,11 +29,14 @@ function _updateloop(window::Window, target_speed::Float64)
             t += dt
             sleep(max(1/target_speed - dt - 0.001, 0.0))
         end
+    catch e
+        println("Error in update loop: ", sprint(showerror, e))
+        throw(e)
     end
 end
 
 function _renderloop(window::Window, target_speed::Float64)
-    @task begin
+    @task try
         t = t′ = time()
         frame = 1
         fps = 0.0
@@ -45,6 +51,9 @@ function _renderloop(window::Window, target_speed::Float64)
                 t′ = time()
             end
         end
+    catch e
+        println("Error in render loop: ", sprint(showerror, e))
+        throw(e)
     end
 end
 

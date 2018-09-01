@@ -10,7 +10,7 @@ mutable struct Audio <: AbstractResource
     end
 end
 
-function Audio(fname::String, window::Window)
+function Audio(window::Window, fname::String)
     if fname in keys(window.resources)
         @debug("resource already loaded: '$fname'")
         return window.resources[fname]::Audio
