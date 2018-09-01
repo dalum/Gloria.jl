@@ -34,8 +34,8 @@ function Polygon(points::Vector{Point{T}}) where {T}
 end
 
 intersects(p1::Point, p2::Point) = p1.x == p2.x && p1.y == p2.y
-intersects(c1::Circle, c2::Circle) = sqrt((c2.x - c1.x)^2 + (c2.y - c1.y)^2) <= c1.radius + c2.radius
-intersects(p::Point, c::Circle) = sqrt((c.x - p.x)^2 + (c.y - p.y)^2) <= c.radius
+intersects(c1::Circle, c2::Circle) = sqrt((c2.x - c1.x)^2 + (c2.y - c1.y)^2) <= c1.r + c2.r
+intersects(p::Point, c::Circle) = sqrt((c.x - p.x)^2 + (c.y - p.y)^2) <= c.r
 
 intersects(l::Line, p::Point) = intersects(p, l)
 function intersects(p::Point, l::Line)

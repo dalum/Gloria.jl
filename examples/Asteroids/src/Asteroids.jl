@@ -74,15 +74,19 @@ function update!(self::LaserBeam; t::Float64, dt::Float64)
     self.y > wrap_height / 2 && (self.y -= wrap_height)
     self.y < -wrap_height / 2 && (self.y += wrap_height)
 
-    for other in object_layer
-        if other isa LaserBeam && other !== self
-            l1 = Line(self.x - 25cos(self.θ*π/180), self.y - 25sin(self.θ*π/180), self.x + 25cos(self.θ*π/180), self.y + 25sin(self.θ*π/180))
-            l2 = Line(other.x - 25cos(other.θ*π/180), other.y - 25sin(other.θ*π/180), other.x + 25cos(other.θ*π/180), other.y + 25sin(other.θ*π/180))
-            if intersects(l1, l2)
-                self.vx = 0
-                self.vy = 0
-                other.vx = 0
-                other.vy = 0
+    if abs(self.vx) > 0 && abs(self.vy) > 0
+        for other in object_layer
+            if other isa LaserBeam && other !== self
+                if intersects(Circle(self.x, self.y, 25.), Circle(other.x, other.y, 25.))
+                    l1 = Line(self.x - 25cos(self.θ*π/180), self.y - 25sin(self.θ*π/180), self.x + 25cos(self.θ*π/180), self.y + 25sin(self.θ*π/180))
+                    l2 = Line(other.x - 25cos(other.θ*π/180), other.y - 25sin(other.θ*π/180), other.x + 25cos(other.θ*π/180), other.y + 25sin(other.θ*π/180))
+                    if intersects(l1, l2)
+                        self.vx = 0
+                        self.vy = 0
+                        other.vx = 0
+                        other.vy = 0
+                    end
+                end
             end
         end
     end
