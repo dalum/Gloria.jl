@@ -105,6 +105,9 @@ Layer(objects::T, args...; kwargs...) where {T<:AbstractVector{<:AbstractObject}
 
 Base.show(io::IO, layer::Layer) = print(io, "Layer(", join([layer.objects, layer.show, layer.origin_x, layer.origin_y, layer.axes, layer.scale], ", "), ")")
 
+Base.iterate(layer::Layer) = iterate(layer.objects)
+Base.iterate(layer::Layer, state) = iterate(layer.objects, state)
+
 """
     wait(window::Window)
 

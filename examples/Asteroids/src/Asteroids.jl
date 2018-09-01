@@ -3,6 +3,7 @@ module Asteroids
 import Gloria: onevent!, render!, update!
 using Gloria: Gloria, AbstractObject, Audio, Event, Layer, Scene, Texture, Window,
     iskey, ispressed, play!
+using Gloria.Physics: Circle, Line, intersects
 
 using Colors: @colorant_str
 
@@ -64,18 +65,31 @@ function update!(obj::Player; t::Float64, dt::Float64)
     obj.y < -wrap_height / 2 && (obj.y += wrap_height)
 end
 
-function update!(obj::LaserBeam; t::Float64, dt::Float64)
-    obj.x += obj.vx*dt
-    obj.y += obj.vy*dt
+function update!(self::LaserBeam; t::Float64, dt::Float64)
+    self.x += self.vx*dt
+    self.y += self.vy*dt
 
-    obj.x > wrap_width / 2 && (obj.x -= wrap_width)
-    obj.x < -wrap_width / 2 && (obj.x += wrap_width)
-    obj.y > wrap_height / 2 && (obj.y -= wrap_height)
-    obj.y < -wrap_height / 2 && (obj.y += wrap_height)
+    self.x > wrap_width / 2 && (self.x -= wrap_width)
+    self.x < -wrap_width / 2 && (self.x += wrap_width)
+    self.y > wrap_height / 2 && (self.y -= wrap_height)
+    self.y < -wrap_height / 2 && (self.y += wrap_height)
+
+    for other in object_layer
+        if other isa LaserBeam && other !== self
+            l1 = Line(self.x - 25cos(self.θ*π/180), self.y - 25sin(self.θ*π/180), self.x + 25cos(self.θ*π/180), self.y + 25sin(self.θ*π/180))
+            l2 = Line(other.x - 25cos(other.θ*π/180), other.y - 25sin(other.θ*π/180), other.x + 25cos(other.θ*π/180), other.y + 25sin(other.θ*π/180))
+            if intersects(l1, l2)
+                self.vx = 0
+                self.vy = 0
+                other.vx = 0
+                other.vy = 0
+            end
+        end
+    end
 end
 
-function render!(layer::Layer, obj::AsteroidsObject; frame::Int, fps::Float64)
-    render!(layer, obj.texture, obj.x, obj.y, angle=-(obj.θ-90))
+function render!(layer::Layer, self::AsteroidsObject; frame::Int, fps::Float64)
+    render!(layer, self.texture, self.x, self.y, angle=-(self.θ-90))
 end
 
 # Setup

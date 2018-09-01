@@ -28,4 +28,6 @@ include("mouse.jl")
 include("keyboard.jl")
 include("audio.jl")
 
+include("Physics.jl")
+
 end # module
