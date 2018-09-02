@@ -70,7 +70,7 @@ const scene = Scene(controls_layer, object_layers...)
 const window = Window("Parallax", width, height, scene, fullscreen=false)
 
 for layer in object_layers
-    append!(layer, [Object(abspath(@__DIR__, "..", "assets", "sample.svg"), 0.0, 0.0, (randn() - 0.5)*20, (randn() - 0.5)*20, (randn() - 0.5)*360, (randn() - 0.5)*60) for i in 0:100])
+    append!(layer, [Object(abspath(@__DIR__, "..", "assets", "sample.svg"), 0.0, 0.0, (randn() - 0.5)*20, (randn() - 0.5)*20, (randn() - 0.5)*360, (randn() - 0.5)*60) for _ in 1:1000])
 end
 
 function main()

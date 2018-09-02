@@ -71,7 +71,7 @@ intersects(c::Circle, l::Line) = intersects(l, c)
 function intersects(l::Line, c::Circle)
     # From https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
     l² = (l.x2 - l.x1)^2 + (l.y2 - l.y1)^2
-    a = -((l.x2 - l.x1)*(l.x1 - c.x) + (l.y2 - l.y1)*(l.y1 - c.y))
+    a = ((l.x2 - l.x1)*(l.x1 - c.x) + (l.y2 - l.y1)*(l.y1 - c.y))
     b = (l.x1 - c.x)^2 + (l.y1 - c.y)^2 - c.r^2
 
     a^2 - l²*b < 0 && return false

@@ -29,9 +29,21 @@ mutable struct LaserBeam <: AsteroidsObject
     vx::Float64
     vy::Float64
     θ::Float64
-    t0::Float64
+    t1::Float64
 end
 LaserBeam(x, y, vx, vy, θ) = LaserBeam(laser_texture, x, y, vx, vy, θ, time())
+
+mutable struct Rock <: AsteroidsObject
+    texture::Texture
+    scale::Float64
+    x::Float64
+    y::Float64
+    vx::Float64
+    vy::Float64
+    θ::Float64
+    ω::Float64
+end
+LaserBeam(x, y, vx, vy, θ) = LaserBeam(laser_texture, x, y, vx, vy, θ, time() + 1)
 
 function onevent!(::Controls, ::Val{:key_down}, e::Event)
     iskey(e, "escape") && Gloria.quit!(window, e)
@@ -39,7 +51,7 @@ end
 
 function onevent!(obj::Player, ::Val{:key_down}, e::Event)
     if iskey(e, "space")
-        play!(laser_sound)
+        play!(laser_sound, volume=10)
         push!(object_layer, LaserBeam(obj.x, obj.y, obj.vx + cos(obj.θ*π/180)*500, obj.vy + sin(obj.θ*π/180)*500, obj.θ))
     end
 end
@@ -66,6 +78,11 @@ function update!(obj::Player; t::Float64, dt::Float64)
 end
 
 function update!(self::LaserBeam; t::Float64, dt::Float64)
+    if time() >= self.t1
+        delete!(object_layer, self)
+        return nothing
+    end
+
     self.x += self.vx*dt
     self.y += self.vy*dt
 
@@ -76,24 +93,41 @@ function update!(self::LaserBeam; t::Float64, dt::Float64)
 
     if abs(self.vx) > 0 && abs(self.vy) > 0
         for other in object_layer
-            if other isa LaserBeam && other !== self
-                if intersects(Circle(self.x, self.y, 25.), Circle(other.x, other.y, 25.))
-                    l1 = Line(self.x - 25cos(self.θ*π/180), self.y - 25sin(self.θ*π/180), self.x + 25cos(self.θ*π/180), self.y + 25sin(self.θ*π/180))
-                    l2 = Line(other.x - 25cos(other.θ*π/180), other.y - 25sin(other.θ*π/180), other.x + 25cos(other.θ*π/180), other.y + 25sin(other.θ*π/180))
-                    if intersects(l1, l2)
-                        self.vx = 0
-                        self.vy = 0
-                        other.vx = 0
-                        other.vy = 0
+            if other isa Rock
+                c = Circle(other.x, other.y, 50other.scale)
+                l = Line(self.x - 25cos(self.θ*π/180), self.y - 25sin(self.θ*π/180), self.x + 25cos(self.θ*π/180), self.y + 25sin(self.θ*π/180))
+                if intersects(l, c)
+                    delete!(object_layer, self)
+                    delete!(object_layer, other)
+                    if other.scale > 0.25
+                        for _ in 1:2
+                            push!(object_layer, Rock(other.texture, other.scale / 2, other.x, other.y, other.vx+(0.5-rand())*50, other.vy+(0.5-rand())*50, other.θ, other.ω))
+                        end
                     end
+                    return nothing
                 end
             end
         end
     end
 end
 
+function update!(obj::Rock; t::Float64, dt::Float64)
+    obj.x += obj.vx*dt
+    obj.y += obj.vy*dt
+    obj.θ += obj.ω*dt
+
+    obj.x > wrap_width / 2 && (obj.x -= wrap_width)
+    obj.x < -wrap_width / 2 && (obj.x += wrap_width)
+    obj.y > wrap_height / 2 && (obj.y -= wrap_height)
+    obj.y < -wrap_height / 2 && (obj.y += wrap_height)
+end
+
 function render!(layer::Layer, self::AsteroidsObject; frame::Int, fps::Float64)
     render!(layer, self.texture, self.x, self.y, angle=-(self.θ-90))
+end
+
+function render!(layer::Layer, self::Rock; frame::Int, fps::Float64)
+    render!(layer, self.texture, self.x, self.y, angle=-(self.θ-90), scale_x=self.scale, scale_y=self.scale)
 end
 
 # Setup
@@ -112,13 +146,17 @@ const keyboard = Gloria.KeyboardState()
 const laser_sound = Audio(window, abspath(@__DIR__, "..", "assets", "laser.wav"))
 const laser_texture = Texture(window, abspath(@__DIR__, "..", "assets", "laser.svg"), width=4, height=50)
 
+const rock_texture = Texture(window, abspath(@__DIR__, "..", "assets", "rock.svg"), width=100, height=100)
+
 const player_texture = Texture(window, abspath(@__DIR__, "..", "assets", "player.svg"), width=50, height=50)
 const player = Player(player_texture, 0., 0., 0., 0., 100., 0., 180.)
 push!(object_layer, player)
 
+push!(object_layer, Rock(rock_texture, 1., 0., 0., 50., 20., 0., 50.,))
+
 function main()
     Gloria.run!(window, target_render_speed = 60.0, target_update_speed = 60.0)
-    wait(window)
+    #wait(window)
 end
 
 # precompile

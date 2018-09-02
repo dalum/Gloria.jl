@@ -3,9 +3,8 @@ Gloria.
 """
 module Gloria
 
-using SimpleDirectMediaLayer
+using SimpleDirectMediaLayer, FileIO, DataStructures
 const SDL = SimpleDirectMediaLayer
-using FileIO
 
 function __init__()
     SDL.GL_SetAttribute(SDL.GL_MULTISAMPLEBUFFERS, 1)

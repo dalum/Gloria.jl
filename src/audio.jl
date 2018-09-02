@@ -31,8 +31,9 @@ load(f::File{format"WAV"}) = Gloria.SDL.Mix_LoadWAV(f.filename)
 load(f::File{format"OGG"}) = Gloria.SDL.Mix_LoadWAV(f.filename)
 load(f::File{format"MP3"}) = Gloria.SDL.Mix_LoadWAV(f.filename)
 
-function play!(audio::Audio, repeat::Int = 0; channel::Int = -1)
-    channel = SDL.Mix_PlayChannel(convert(Int32, channel), audio.ptr, convert(Int32, repeat))
+function play!(audio::Audio; repeat::Int = 0, channel::Int = -1, volume::Int = 100)
+    channel = SDL.Mix_PlayChannel(convert(Int32, channel)::Int32, audio.ptr, convert(Int32, repeat)::Int32)
+    SDL.Mix_Volume(channel, convert(Int32, volume)::Int32)
     push!(audio.channels, channel)
     return audio
 end

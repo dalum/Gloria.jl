@@ -13,7 +13,7 @@ function _eventloop(window::Window, target_speed::Float64)
             sleep(max(1/target_speed - dt - 0.001, 0.0))
         end
     catch e
-        println("Error in event loop: ", sprint(showerror, e))
+        println("ERROR (event loop): ", sprint(showerror, e))
         throw(e)
     end
 end
@@ -30,7 +30,7 @@ function _updateloop(window::Window, target_speed::Float64)
             sleep(max(1/target_speed - dt - 0.001, 0.0))
         end
     catch e
-        println("Error in update loop: ", sprint(showerror, e))
+        println("ERROR (update loop): ", sprint(showerror, e))
         throw(e)
     end
 end
@@ -52,7 +52,7 @@ function _renderloop(window::Window, target_speed::Float64)
             end
         end
     catch e
-        println("Error in render loop: ", sprint(showerror, e))
+        println("ERROR (render loop): ", sprint(showerror, e))
         throw(e)
     end
 end
@@ -145,10 +145,10 @@ function render!(window::Window, layer::Layer; frame::Int, fps::Float64)
             render!(layer, obj, frame=frame, fps=fps)
         end
 
-        for r in layer._render_tasks
+        for r in layer.render_tasks
             render!(window, r)
         end
-        empty!(layer._render_tasks)
+        empty!(layer.render_tasks)
     end
     return window
 end

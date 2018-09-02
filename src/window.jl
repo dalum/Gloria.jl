@@ -88,20 +88,21 @@ end
 A Layer object runs inside a Scene.
 
 """
-mutable struct Layer{T <: AbstractVector{<:AbstractObject}} <: AbstractLayer
-    objects::T
-    origin_x::Real
-    origin_y::Real
-    axes::Matrix{<:Real}
+mutable struct Layer <: AbstractLayer
+    objects::OrderedSet{<:AbstractObject}
+    origin_x::Float64
+    origin_y::Float64
+    axes::Matrix{<:Float64}
     scale::Float64
     show::Bool
-    _render_tasks::Vector{RenderTask}
+    render_tasks::Vector{RenderTask}
 
-    function Layer{T}(objects::T, origin_x::Real = 0.0, origin_y::Real = 0.0, axes::Matrix{<:Real} = [1. 0.; 0. 1.]; show::Bool = true, scale::Float64 = 1.0) where {T<:AbstractVector{<:AbstractObject}}
+    function Layer(objects, origin_x = 0.0, origin_y = 0.0, axes = [1. 0.; 0. 1.]; show = true, scale = 1.0)
         return new(objects, origin_x, origin_y, axes, scale, show, RenderTask[])
     end
 end
-Layer(objects::T, args...; kwargs...) where {T<:AbstractVector{<:AbstractObject}} = Layer{T}(objects, args...; kwargs...)
+
+Layer(objects::Vector, args...; kwargs...) = Layer(OrderedSet(objects), args...; kwargs...)
 
 Base.show(io::IO, layer::Layer) = print(io, "Layer(", join([layer.objects, layer.show, layer.origin_x, layer.origin_y, layer.axes, layer.scale], ", "), ")")
 
@@ -178,9 +179,10 @@ push!(layer::AbstractLayer, objs::AbstractObject...)
 Add one or more `objs` to `layer`.
 
 """
-Base.push!(layer::AbstractLayer, objs::AbstractObject...) = push!(layer.objects, objs...)
+Base.push!(layer::Layer, objs::AbstractObject...) = (push!(layer.objects, objs...); layer)
 
-Base.pop!(scene::AbstractLayer) = pop!(layer.objects)
+Base.pop!(layer::Layer) = pop!(layer.objects)
+Base.delete!(layer::Layer, key) = (Base.delete!(layer.objects, key); layer)
 
 """
 append!(layer::AbstractLayer, objs::AbstractVector{<:AbstractObject})
@@ -188,4 +190,4 @@ append!(layer::AbstractLayer, objs::AbstractVector{<:AbstractObject})
 Add the objects in `objs` to `layer`.
 
 """
-Base.append!(layer::AbstractLayer, objs::AbstractVector{<:AbstractObject}) = append!(layer.objects, objs)
+Base.append!(layer::Layer, objs::AbstractVector{<:AbstractObject}) = append!(layer.objects, objs)

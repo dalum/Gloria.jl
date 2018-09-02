@@ -105,7 +105,7 @@ function render!(layer::Layer, texture::Texture, pos::Vector{<:Real}; scale_x::F
     x, y = round.(Int, (layer.axes*pos).*layer.scale .+ [layer.origin_x, layer.origin_y])
     scale_x *= layer.scale
     scale_y *= layer.scale
-    push!(layer._render_tasks, RenderTask(texture, x, y, scale_x, scale_y, angle, offset_x, offset_y, flip))
+    push!(layer.render_tasks, RenderTask(texture, x, y, scale_x, scale_y, angle, offset_x, offset_y, flip))
     return layer
 end
 render!(layer::Layer, texture::Texture, xs::T...; args...) where {T<:Real} = render!(layer, texture, collect(xs); args...)
