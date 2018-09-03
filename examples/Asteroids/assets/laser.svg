@@ -5,11 +5,39 @@
    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
    xmlns:svg="http://www.w3.org/2000/svg"
    xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    id="svg8"
    version="1.1"
-   viewBox="0 0 1.88792 29.66917"
-   height="29.66917mm"
-   width="1.88792mm">
+   viewBox="0 0 29.66917 1.88792"
+   height="1.88792mm"
+   width="29.66917mm"
+   sodipodi:docname="laser.svg"
+   inkscape:version="0.92.2 2405546, 2018-03-11">
+  <sodipodi:namedview
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1"
+     objecttolerance="10"
+     gridtolerance="10"
+     guidetolerance="10"
+     inkscape:pageopacity="0"
+     inkscape:pageshadow="2"
+     inkscape:window-width="749"
+     inkscape:window-height="480"
+     id="namedview1683"
+     showgrid="false"
+     fit-margin-top="0"
+     fit-margin-left="0"
+     fit-margin-right="0"
+     fit-margin-bottom="0"
+     inkscape:zoom="2.1045977"
+     inkscape:cx="56.067722"
+     inkscape:cy="3.5677215"
+     inkscape:window-x="468"
+     inkscape:window-y="144"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="svg8" />
   <defs
      id="defs2" />
   <metadata
@@ -25,11 +53,12 @@
     </rdf:RDF>
   </metadata>
   <g
-     transform="translate(-102.905,-130.03)"
+     transform="rotate(90,131.30209,28.397085)"
      id="layer1">
     <path
        id="path817"
        d="M 103.1875,159.41667 V 130.3125 h 1.32292 v 29.10417 z"
-       style="fill:#feefef;fill-opacity:1;stroke:#ed67e3;stroke-width:0.565;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+       style="fill:#feefef;fill-opacity:1;stroke:#ed67e3;stroke-width:0.565;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       inkscape:connector-curvature="0" />
   </g>
 </svg>

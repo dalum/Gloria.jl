@@ -1,3 +1,6 @@
+abstract type AbstractScene end
+abstract type AbstractLayer end
+
 """
 
 A Window.
@@ -73,11 +76,10 @@ Scene(layers::T) where {T<:AbstractVector{<:AbstractLayer}} = Scene(layers, Colo
 
 struct RenderTask{T <: AbstractResource}
     source::T
-    x::Int
-    y::Int
-    scale_x::Float64
-    scale_y::Float64
-    angle::Float64
+    x::Float64
+    y::Float64
+    θ::Float64
+    scale::Float64
     offset_x::Int
     offset_y::Int
     flip::Symbol
@@ -90,23 +92,23 @@ A Layer object runs inside a Scene.
 """
 mutable struct Layer{T} <: AbstractLayer
     objects::OrderedSet{T}
-    origin_x::Float64
-    origin_y::Float64
-    axes::Matrix{<:Float64}
+    x::Float64
+    y::Float64
+    θ::Float64
     scale::Float64
     show::Bool
     render_tasks::Vector{RenderTask}
     new_objects::OrderedSet{T}
     dead_objects::Set{T}
 
-    function Layer{T}(objects, origin_x = 0.0, origin_y = 0.0, axes = [1. 0.; 0. 1.]; show = true, scale = 1.0) where {T}
-        return new(objects, origin_x, origin_y, axes, scale, show, RenderTask[], OrderedSet{T}(), Set{T}())
+    function Layer{T}(objects, x = 0.0, y = 0.0, θ = 0.0; show = true, scale = 1.0) where {T}
+        return new(objects, x, y, θ, scale, show, RenderTask[], OrderedSet{T}(), Set{T}())
     end
 end
 Layer(objects::OrderedSet{T}, args...; kwargs...) where {T} = Layer{T}(objects, args...; kwargs...)
 Layer(objects::Vector, args...; kwargs...) = Layer(OrderedSet(objects), args...; kwargs...)
 
-Base.show(io::IO, layer::Layer) = print(io, "Layer(", join([layer.objects, layer.show, layer.origin_x, layer.origin_y, layer.axes, layer.scale], ", "), ")")
+Base.show(io::IO, layer::Layer) = print(io, "Layer(", join([layer.objects, layer.show, layer.x, layer.y, layer.axes, layer.scale], ", "), ")")
 
 Base.iterate(layer::Layer) = iterate(layer.objects)
 Base.iterate(layer::Layer, state) = iterate(layer.objects, state)
@@ -138,62 +140,37 @@ end
 
 unsafe_title(window::Window) = unsafe_string(SDL.GetWindowTitle(window.window_ptr))
 
-"""
-    push!(window::Window, scenes::AbstractScene...)
-
-Add one or more `scenes` to the top of the scene stack of `window`.
-
-"""
 Base.push!(window::Window, scenes::AbstractScene...) = push!(window.scene_stack, scenes...)
-
 Base.pop!(window::Window) = pop!(window.scene_stack)
-
-"""
-    append!(window::Window, scenes::AbstractVector{<:AbstractScene})
-
-Add the elements of `scenes` to the the top of the scene stack of
-`window`.
-
-"""
 Base.append!(window::Window, scenes::AbstractVector{<:AbstractScene}) = append!(window.scene_stack, scenes)
-
-"""
-    push!(scene::AbstractScene, layers::AbstractLayer...)
-
-Add one or more `layers` to `scene`.
-
-"""
 Base.push!(scene::AbstractScene, layers::AbstractLayer...) = push!(scene.layers, layers...)
-
 Base.pop!(scene::AbstractScene) = pop!(scene.layers)
-
-"""
-append!(scene::AbstractScene, objs::AbstractVector{<:AbstractLayer})
-
-Add the layers in `layers` to `scene`.
-
-"""
 Base.append!(scene::AbstractScene, layers::AbstractVector{<:AbstractLayer}) = append!(scene.layers, layers)
-
-"""
-push!(layer::AbstractLayer, objs::AbstractObject...)
-
-Add one or more `objs` to `layer`.
-
-"""
 Base.push!(layer::Layer, objs...) = (push!(layer.objects, objs...); layer)
 Base.delete!(layer::Layer, obj) = (delete!(layer.objects, obj); layer)
 
+"""
+
+"""
 add!(layer::Layer, objs...) = (push!(layer.new_objects, objs...); layer)
 
+"""
+
+"""
 function populate!(layer::Layer)
     union!(layer.objects, layer.new_objects)
     empty!(layer.new_objects)
     return layer
 end
 
+"""
+
+"""
 kill!(layer::Layer, objs...) = (push!(layer.dead_objects, objs...); layer)
 
+"""
+
+"""
 function cleanup!(layer::Layer)
     setdiff!(layer.objects, layer.dead_objects)
     empty!(layer.dead_objects)

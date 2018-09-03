@@ -154,7 +154,7 @@ function render!(window::Window, layer::Layer; frame::Int, fps::Float64)
         end
 
         for r in layer.render_tasks
-            render!(window, r)
+            render!(window, layer, r)
         end
         empty!(layer.render_tasks)
     end

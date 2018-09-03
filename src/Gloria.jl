@@ -14,12 +14,12 @@ end
 
 using Colors
 
-abstract type AbstractScene end
-abstract type AbstractLayer end
 abstract type AbstractResource end
 abstract type AbstractObject end
 
 include("window.jl")
+include("texture.jl")
+include("shape.jl")
 include("events.jl")
 include("loops.jl")
 include("graphics.jl")
@@ -27,6 +27,6 @@ include("mouse.jl")
 include("keyboard.jl")
 include("audio.jl")
 
-include("Physics.jl")
+include("physics.jl")
 
 end # module

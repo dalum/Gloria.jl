@@ -1,5 +1,3 @@
-module Physics
-
 abstract type AbstractShape end
 
 struct Point{T} <: AbstractShape
@@ -32,6 +30,11 @@ function Polygon(points::Vector{Point{T}}) where {T}
     end
     return Polygon(lines)
 end
+
+transform(p::Point, x, y, θ) = Point(x + cosd(θ)*p.x - sind(θ)*p.y, y + sind(θ)*p.x + cosd(θ)*p.y)
+transform(c::Circle, x, y, θ) = Circle(x + cosd(θ)*c.x - sind(θ)*c.y, y + sind(θ)*c.x + cosd(θ)*c.y, c.r)
+transform(l::Line, x, y, θ) = Line(x + cosd(θ)*l.x1 - sind(θ)*l.y1, y + sind(θ)*l.x1 + cosd(θ)*l.y1, x + cosd(θ)*l.x2 - sind(θ)*l.y2, y + sind(θ)*l.x2 + cosd(θ)*l.y2)
+transform(p::Polygon, x, y, θ) = Polygon(transform.(p.lines, x, y, θ))
 
 intersects(p1::Point, p2::Point) = p1.x == p2.x && p1.y == p2.y
 intersects(c1::Circle, c2::Circle) = sqrt((c2.x - c1.x)^2 + (c2.y - c1.y)^2) <= c1.r + c2.r
@@ -84,5 +87,3 @@ function intersects(l::Line, c::Circle)
 
     return 0 <= d1 <= 1 || 0 <= d2 <= 1
 end
-
-end # module
