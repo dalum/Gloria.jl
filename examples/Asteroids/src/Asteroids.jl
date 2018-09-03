@@ -2,7 +2,8 @@ module Asteroids
 
 import Gloria: onevent!, render!, update!
 using Gloria: Gloria, AbstractObject, Audio, Event, Layer, Scene, Texture, Window,
-    iskey, ispressed, play!
+    add!, kill!, play!,
+    iskey, ispressed
 using Gloria.Physics: Circle, Line, intersects
 
 using Colors: @colorant_str
@@ -52,7 +53,7 @@ end
 function onevent!(obj::Player, ::Val{:key_down}, e::Event)
     if iskey(e, "space")
         play!(laser_sound, volume=10)
-        push!(object_layer, LaserBeam(obj.x, obj.y, obj.vx + cos(obj.θ*π/180)*500, obj.vy + sin(obj.θ*π/180)*500, obj.θ))
+        add!(object_layer, LaserBeam(obj.x, obj.y, obj.vx + cos(obj.θ*π/180)*500, obj.vy + sin(obj.θ*π/180)*500, obj.θ))
     end
 end
 
@@ -97,11 +98,10 @@ function update!(self::LaserBeam; t::Float64, dt::Float64)
                 c = Circle(other.x, other.y, 50other.scale)
                 l = Line(self.x - 25cos(self.θ*π/180), self.y - 25sin(self.θ*π/180), self.x + 25cos(self.θ*π/180), self.y + 25sin(self.θ*π/180))
                 if intersects(l, c)
-                    delete!(object_layer, self)
-                    delete!(object_layer, other)
+                    kill!(object_layer, self, other)
                     if other.scale > 0.25
                         for _ in 1:2
-                            push!(object_layer, Rock(other.texture, other.scale / 2, other.x, other.y, other.vx+(0.5-rand())*50, other.vy+(0.5-rand())*50, other.θ, other.ω))
+                            add!(object_layer, Rock(other.texture, other.scale / 2, other.x, other.y, other.vx+(0.5-rand())*50, other.vy+(0.5-rand())*50, other.θ, other.ω))
                         end
                     end
                     return nothing
@@ -150,13 +150,12 @@ const rock_texture = Texture(window, abspath(@__DIR__, "..", "assets", "rock.svg
 
 const player_texture = Texture(window, abspath(@__DIR__, "..", "assets", "player.svg"), width=50, height=50)
 const player = Player(player_texture, 0., 0., 0., 0., 100., 0., 180.)
-push!(object_layer, player)
 
-push!(object_layer, Rock(rock_texture, 1., 0., 0., 50., 20., 0., 50.,))
+add!(object_layer, player, Rock(rock_texture, 1., 0., 0., 50., 20., 0., 50.))
 
 function main()
-    Gloria.run!(window, target_render_speed = 60.0, target_update_speed = 60.0)
-    #wait(window)
+    Gloria.run!(window)
+    wait(window)
 end
 
 # precompile

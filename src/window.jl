@@ -52,7 +52,7 @@ end
 Remove the reference to the resource located at `filename` from `window`.
 
 """
-function delete!(window::Window, filename::String)
+function Base.delete!(window::Window, filename::String)
     delete!(window.resources, filename)
     return window
 end
@@ -88,20 +88,22 @@ end
 A Layer object runs inside a Scene.
 
 """
-mutable struct Layer <: AbstractLayer
-    objects::OrderedSet{<:AbstractObject}
+mutable struct Layer{T} <: AbstractLayer
+    objects::OrderedSet{T}
     origin_x::Float64
     origin_y::Float64
     axes::Matrix{<:Float64}
     scale::Float64
     show::Bool
     render_tasks::Vector{RenderTask}
+    new_objects::OrderedSet{T}
+    dead_objects::Set{T}
 
-    function Layer(objects, origin_x = 0.0, origin_y = 0.0, axes = [1. 0.; 0. 1.]; show = true, scale = 1.0)
-        return new(objects, origin_x, origin_y, axes, scale, show, RenderTask[])
+    function Layer{T}(objects, origin_x = 0.0, origin_y = 0.0, axes = [1. 0.; 0. 1.]; show = true, scale = 1.0) where {T}
+        return new(objects, origin_x, origin_y, axes, scale, show, RenderTask[], OrderedSet{T}(), Set{T}())
     end
 end
-
+Layer(objects::OrderedSet{T}, args...; kwargs...) where {T} = Layer{T}(objects, args...; kwargs...)
 Layer(objects::Vector, args...; kwargs...) = Layer(OrderedSet(objects), args...; kwargs...)
 
 Base.show(io::IO, layer::Layer) = print(io, "Layer(", join([layer.objects, layer.show, layer.origin_x, layer.origin_y, layer.axes, layer.scale], ", "), ")")
@@ -179,15 +181,21 @@ push!(layer::AbstractLayer, objs::AbstractObject...)
 Add one or more `objs` to `layer`.
 
 """
-Base.push!(layer::Layer, objs::AbstractObject...) = (push!(layer.objects, objs...); layer)
+Base.push!(layer::Layer, objs...) = (push!(layer.objects, objs...); layer)
+Base.delete!(layer::Layer, obj) = (delete!(layer.objects, obj); layer)
 
-Base.pop!(layer::Layer) = pop!(layer.objects)
-Base.delete!(layer::Layer, key) = (Base.delete!(layer.objects, key); layer)
+add!(layer::Layer, objs...) = (push!(layer.new_objects, objs...); layer)
 
-"""
-append!(layer::AbstractLayer, objs::AbstractVector{<:AbstractObject})
+function populate!(layer::Layer)
+    union!(layer.objects, layer.new_objects)
+    empty!(layer.new_objects)
+    return layer
+end
 
-Add the objects in `objs` to `layer`.
+kill!(layer::Layer, objs...) = (push!(layer.dead_objects, objs...); layer)
 
-"""
-Base.append!(layer::Layer, objs::AbstractVector{<:AbstractObject}) = append!(layer.objects, objs)
+function cleanup!(layer::Layer)
+    setdiff!(layer.objects, layer.dead_objects)
+    empty!(layer.dead_objects)
+    return layer
+end

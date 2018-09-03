@@ -1,71 +1,77 @@
+const SLEEP_MAKEUP_TIME = 0.0011 # TODO: Calculate this automatically
+const GLOBAL_LOOP_LOCK = Channel{UInt8}(1)
+put!(GLOBAL_LOOP_LOCK, 0x00)
+
+macro loop(name::String, body::Expr)
+    _loop(name, body)
+end
+
+macro loop(name::String, initialize::Expr, body::Expr, finalize::Expr = :())
+    _loop(name, initialize, body, finalize)
+end
+
+_loop(name::String, body::Expr) = _loop(name, :(), body)
+function _loop(name::String, initialize::Expr, body::Expr, finalize::Expr = :())
+    global GLOBAL_LOOP_LOCK
+    quote
+        function (window::Window, target_speed::Float64)
+            @task try
+                t = t0 = time()
+                dt = 0.0
+                $initialize
+                while length(window.scene_stack) > 0
+                    t1 = time()
+                    __key = take!($GLOBAL_LOOP_LOCK)
+                    dt = time() - t
+                    t += dt
+                    $body
+                    put!($GLOBAL_LOOP_LOCK, __key)
+                    t2 = time()
+                    sleep(max(1/target_speed - (t2 - t1) - $SLEEP_MAKEUP_TIME, 0.0))
+                end
+                $finalize
+            catch e
+                println("ERROR ($($name)): ", sprint(showerror, e, stacktrace(catch_backtrace())))
+            end
+        end
+    end
+end
+
 # Default loops
-function _eventloop(window::Window, target_speed::Float64)
-    @task try
-        t = time()
-        event_data = zeros(UInt8, 56)
-        while length(window.scene_stack) > 0
-            while SDL.PollEvent(event_data) != 0
-                event_type, event = parseevent(window, event_data)
-                onevent!(window, Val(event_type), event)
-            end
-            dt = time() - t
-            t += dt
-            sleep(max(1/target_speed - dt - 0.001, 0.0))
-        end
-    catch e
-        println("ERROR (event loop): ", sprint(showerror, e))
-        throw(e)
-    end
+
+const DEFAULT_EVENT_LOOP = @loop "event loop" (event_data = zeros(UInt8, 56)) while SDL.PollEvent(event_data) != 0
+    event_type, event = parseevent(window, event_data)
+    onevent!(window, Val(event_type), event)
 end
 
-function _updateloop(window::Window, target_speed::Float64)
-    @task try
+const DEFAULT_UPDATE_LOOP = @loop "update loop" update!(window, t=(t - t0), dt=dt)
+
+const DEFAULT_RENDER_LOOP = @loop "render loop" (frame = 1; fps = 0.0; t00 = time()) begin
+    if frame % target_speed == 0
+        fps = target_speed / (time() - t0)
         t0 = time()
-        t = t0
-        dt = 1/target_speed
-        while length(window.scene_stack) > 0
-            update!(window, t=(t - t0), dt=dt)
-            dt = time() - t
-            t += dt
-            sleep(max(1/target_speed - dt - 0.001, 0.0))
-        end
-    catch e
-        println("ERROR (update loop): ", sprint(showerror, e))
-        throw(e)
     end
-end
-
-function _renderloop(window::Window, target_speed::Float64)
-    @task try
-        t = t′ = time()
-        frame = 1
-        fps = 0.0
-        while length(window.scene_stack) > 0
-            render!(window, frame=frame, fps=fps)
-            dt = time() - t
-            t += dt
-            frame += 1
-            sleep(max(1/target_speed - dt - 0.001, 0.0))
-            if frame % target_speed == 0
-                fps = target_speed / (time() - t′)
-                t′ = time()
-            end
-        end
-    catch e
-        println("ERROR (render loop): ", sprint(showerror, e))
-        throw(e)
-    end
+    render!(window, frame=frame, fps=fps)
+    frame += 1
 end
 
 """
-    run!(window::Window; args...)
+    run!(window::Window, [loop])
 
 Execute `window`.
 
 """
-function run!(window::Window; target_event_speed::Float64 = 100.0, target_update_speed::Float64 = 30.0, target_render_speed::Float64 = 30.0, eventloop::Function = _eventloop, updateloop::Function = _updateloop, renderloop::Function = _renderloop)
-    append!(window.tasks, [eventloop(window, target_event_speed), updateloop(window, target_update_speed), renderloop(window, target_render_speed)])
-    schedule.(window.tasks)
+function run!(window::Window; target_event_speed::Float64 = 100.0, target_update_speed::Float64 = 60.0, target_render_speed::Float64 = 60.0)
+    return run!(window,
+                target_event_speed => DEFAULT_EVENT_LOOP,
+                target_update_speed => DEFAULT_UPDATE_LOOP,
+                target_render_speed => DEFAULT_RENDER_LOOP)
+end
+
+function run!(window::Window, loops::Pair{Float64,<:Function}...)
+    tasks = [loop(window, speed) for (speed, loop) in loops]
+    append!(window.tasks, tasks)
+    schedule.(tasks)
     return window
 end
 
@@ -132,9 +138,11 @@ function onevent!(layer::Layer, val::Val, e::Event)
 end
 
 function update!(layer::Layer; t::Float64, dt::Float64)
+    populate!(layer)
     for obj in layer.objects
         update!(obj, t=t, dt=dt)
     end
+    cleanup!(layer)
     return layer
 end
 
