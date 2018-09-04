@@ -1,132 +1,143 @@
 module Asteroids
 
 import Gloria: onevent!, render!, update!
-using Gloria: Gloria, AbstractObject, Audio, Circle, Event, Layer, Line, PhysicalObject, Scene, Texture, Window,
-    accelerate!, add!, kill!, play!,
+using Gloria: Gloria, AbstractObject, Audio, Circle, Event, Layer, Line, Scene, Texture, Window,
+    add!, kill!, play!,
     intersects, iskey, ispressed
 
+using Gloria.Physics: Physical
+
 using Colors: @colorant_str
+
+##################################################
+# Types
+##################################################
 
 struct Controls <: AbstractObject end
 
 abstract type AsteroidsObject <: AbstractObject end
 
-mutable struct Player <: AsteroidsObject
-    phy::PhysicalObject
+struct Player <: AsteroidsObject
+    model::Texture
     a::Float64
     α::Float64
 end
-function Player(a, α)
-    shape = Circle(0., 0., 25.)
-    texture = Texture(window, abspath(@__DIR__, "..", "assets", "player.svg"), width=50, height=50)
-    phy = PhysicalObject(texture, shape)
-    Player(phy, a, α)
-end
 
-mutable struct LaserBeam <: AsteroidsObject
-    phy::PhysicalObject
+struct LaserBeam <: AsteroidsObject
+    model::Texture
     t1::Float64
 end
-function LaserBeam(x, y, vx, vy, θ)
-    shape = Line(-25., 0., 25., 0.)
-    texture = Texture(window, abspath(@__DIR__, "..", "assets", "laser.svg"), width=50, height=4)
-    phy = PhysicalObject(texture, shape, x, y, θ, vx, vy)
-    LaserBeam(phy, time() + 1)
-end
 
-mutable struct Rock <: AsteroidsObject
-    phy::PhysicalObject
+struct Rock <: AsteroidsObject
+    model::Texture
     scale::Float64
 end
-function Rock(scale, x, y, vx, vy, θ, ω)
-    shape = Circle(0., 0., 50scale)
-    texture = Texture(window, abspath(@__DIR__, "..", "assets", "rock.svg"), width=100, height=100)
-    phy = PhysicalObject(texture, shape, x, y, θ, vx, vy, ω)
-    Rock(phy, scale)
+
+function Physical{Player}(a, α)
+    model = Texture(window, abspath(@__DIR__, "..", "assets", "player.svg"), width=50, height=50)
+    shape = Circle(0., 0., 25.)
+    return Physical(Player(model, a, α), shape)
 end
+
+function Physical{LaserBeam}(x, y, vx, vy, θ)
+    model = Texture(window, abspath(@__DIR__, "..", "assets", "laser.svg"), width=50, height=4)
+    shape = Line(-25., 0., 25., 0.)
+    return Physical(LaserBeam(model, time() + 1), shape; x=x, y=y, θ=θ, vx=vx, vy=vy)
+end
+
+function Physical{Rock}(scale, x, y, vx, vy, θ, ω)
+    model = Texture(window, abspath(@__DIR__, "..", "assets", "rock.svg"), width=100, height=100)
+    shape = Circle(0., 0., 50scale)
+    return Physical(Rock(model, scale), shape, x=x, y=y, θ=θ, vx=vx, vy=vy, ω=ω)
+end
+
+##################################################
+# Events
+##################################################
 
 function onevent!(::Controls, ::Val{:key_down}, e::Event)
     iskey(e, "escape") && Gloria.quit!(window, e)
 end
 
-function onevent!(self::Player, ::Val{:key_down}, e::Event)
+function onevent!(self::Physical{Player}, ::Val{:key_down}, e::Event)
     if iskey(e, "space")
         play!(laser_sound, volume=10)
-        add!(object_layer, LaserBeam(self.phy.x, self.phy.y, self.phy.vx + cosd(self.phy.θ)*500, self.phy.vy + sind(self.phy.θ)*500, self.phy.θ))
+        add!(object_layer, Physical{LaserBeam}(self.x, self.y, self.vx + cosd(self.θ)*500, self.vy + sind(self.θ)*500, self.θ))
     end
 end
 
-function onevent!(self::Player, ::Val{:key_up}, e::Event)
+function onevent!(self::Physical{Player}, ::Val{:key_up}, e::Event)
     if iskey(e, "right") || iskey(e, "left")
-        self.phy.ω = 0.
+        self.ω = 0.
     end
 end
 
-function wraparound!(obj::AsteroidsObject)
-    obj.phy.x > wrap_width / 2 && (obj.phy.x -= wrap_width)
-    obj.phy.x < -wrap_width / 2 && (obj.phy.x += wrap_width)
-    obj.phy.y > wrap_height / 2 && (obj.phy.y -= wrap_height)
-    obj.phy.y < -wrap_height / 2 && (obj.phy.y += wrap_height)
-    return obj
-end
+##################################################
+# Update
+##################################################
 
-function update!(self::Player; t::Float64, dt::Float64)
+function update!(self::Physical{Player}; t, dt)
     if ispressed(keyboard, "up")
-        accelerate!(self.phy, self.a*cosd(self.phy.θ), self.a*sind(self.phy.θ), dt=dt)
+        self.vx += self.wrapped.a*cosd(self.θ)*dt
+        self.vy += self.wrapped.a*sind(self.θ)*dt
     end
-    if ispressed(keyboard, "left") && abs(self.phy.ω) < 360
-        accelerate!(self.phy, 0., 0., -self.α, dt=dt)
+    if ispressed(keyboard, "left") && abs(self.ω) < 360
+        self.ω -= self.wrapped.α*dt
     end
-    if ispressed(keyboard, "right") && abs(self.phy.ω) < 360
-        accelerate!(self.phy, 0., 0., self.α, dt=dt)
+    if ispressed(keyboard, "right") && abs(self.ω) < 360
+        self.ω += self.wrapped.α*dt
     end
-    update!(self.phy, dt=dt)
-    wraparound!(self)
 end
 
-function update!(self::LaserBeam; t::Float64, dt::Float64)
-    if time() >= self.t1
+function update!(self::Physical{LaserBeam}; t, dt)
+    if time() >= self.wrapped.t1
         kill!(object_layer, self)
     end
-    update!(self.phy, dt=dt)
-    wraparound!(self)
 
     for other in object_layer
-        if other isa Rock && intersects(self.phy, other.phy)
+        if other isa Physical{Rock} && intersects(self, other)
             kill!(object_layer, self, other)
-            if other.scale > 0.25
+            if other.wrapped.scale > 0.25
                 for _ in 1:2
-                    vx = 0.2self.phy.vx + other.phy.vx + (0.5-rand())*50
-                    vy = 0.2self.phy.vy + other.phy.vy + (0.5-rand())*50
-                    ω = other.phy.ω + (0.5-rand())*50
-                    add!(object_layer, Rock(other.scale / 2, other.phy.x, other.phy.y, vx, vy, 360rand(), ω))
+                    vx = 0.2self.vx + other.vx + (0.5-rand())*50
+                    vy = 0.2self.vy + other.vy + (0.5-rand())*50
+                    ω = other.ω + (0.5-rand())*50
+                    add!(object_layer, Physical{Rock}(other.wrapped.scale/2, other.x, other.y, vx, vy, 360rand(), ω))
                 end
             end
         end
     end
 end
 
-function update!(self::Rock; t::Float64, dt::Float64)
-    update!(self.phy, dt=dt)
-    wraparound!(self)
+function Gloria.after_update!(obj::Physical{<:AsteroidsObject}; t, dt)
+    obj.x > wrap_width / 2 && (obj.x -= wrap_width)
+    obj.x < -wrap_width / 2 && (obj.x += wrap_width)
+    obj.y > wrap_height / 2 && (obj.y -= wrap_height)
+    obj.y < -wrap_height / 2 && (obj.y += wrap_height)
 end
 
-function render!(layer::Layer, self::AsteroidsObject; frame::Int, fps::Float64)
-    render!(layer, self.phy)
+##################################################
+# Render
+##################################################
+
+function render!(layer::Layer, self::AsteroidsObject, x, y, θ; frame::Int, fps::Float64)
+    render!(layer, self.model, x, y, θ)
 end
 
-function render!(layer::Layer, self::Rock; frame::Int, fps::Float64)
-    render!(layer, self.phy, scale=self.scale)
+function render!(layer::Layer, self::Rock, x, y, θ; frame::Int, fps::Float64)
+    render!(layer, self.model, x, y, θ, scale=self.scale)
 end
 
+##################################################
 # Setup
+##################################################
 
 # const width, height = 1920, 1080
 const width, height = 800, 600
 const wrap_width, wrap_height = width + 100, height + 100
 const controls_layer = Layer([Controls()], show=false)
 
-const object_layer = Layer(AbstractObject[], width/2, height/2)
+const object_layer = Layer(Physical[], width/2, height/2)
 
 const scene = Scene(controls_layer, object_layer, color=colorant"black")
 const window = Window("Asteroids", width, height, scene, fullscreen=false)
@@ -134,16 +145,19 @@ const keyboard = Gloria.KeyboardState()
 
 const laser_sound = Audio(window, abspath(@__DIR__, "..", "assets", "laser.wav"))
 
-const player = Player(100., 360.)
+const player = Physical{Player}(100., 360.)
 
-add!(object_layer, player, Rock(1., rand(-width/2:width/2), rand(-height/2:height/2), (0.5-randn())*50., (0.5-randn())*50., 360rand(), 360rand()))
+add!(object_layer, player, Physical{Rock}(1., rand(-width/2:width/2), rand(-height/2:height/2), (0.5-randn())*50., (0.5-randn())*50., 360rand(), 360rand()))
 
 function main()
     Gloria.run!(window)
     wait(window)
 end
 
-# precompile
+##################################################
+# Precompile
+##################################################
+
 # const dir = abspath(@__DIR__, "..", "precompile")
 # const blacklist_import = []
 # const fnames = collect(filter(x->occursin(r"^precompile_.*\.jl$", x), readdir(dir)))

@@ -27,6 +27,9 @@ include("mouse.jl")
 include("keyboard.jl")
 include("audio.jl")
 
-include("physics.jl")
+include("model.jl")
+
+# Submodules
+include("Physics.jl")
 
 end # module

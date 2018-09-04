@@ -44,7 +44,11 @@ const DEFAULT_EVENT_LOOP = @loop "event loop" (event_data = zeros(UInt8, 56)) wh
     onevent!(window, Val(event_type), event)
 end
 
-const DEFAULT_UPDATE_LOOP = @loop "update loop" update!(window, t=(t - t0), dt=dt)
+const DEFAULT_UPDATE_LOOP = @loop "update loop" begin
+    before_update!(window, t=(t - t0), dt=dt)
+    update!(window, t=(t - t0), dt=dt)
+    after_update!(window, t=(t - t0), dt=dt)
+end
 
 const DEFAULT_RENDER_LOOP = @loop "render loop" (frame = 1; fps = 0.0; t00 = time()) begin
     if frame % target_speed == 0
@@ -97,14 +101,19 @@ function quit!(window::Window, e::Event)
 end
 
 function onevent!(::AbstractObject, ::Val, ::Event) end
-function update!(::AbstractObject; args...) end
+for fn in [:before_update!, :update!, :after_update!]
+    @eval function $fn(::AbstractObject; t=t, dt=dt) end
+end
 function render!(::Window, ::AbstractObject; args...) end
 
 onevent!(window::Window, ::Val{:notsupported}, ::Event) = window
 onevent!(window::Window, val::Val, e::Event) = length(window.scene_stack) > 0 ? onevent!(window.scene_stack[end], val, e) : nothing
 onevent!(window::Window, val::Val{:quit}, e::Event) = quit!(window, e)
 
-update!(window::Window; t::Float64, dt::Float64) = length(window.scene_stack) > 0 ? update!(window.scene_stack[end], t=t, dt=dt) : nothing
+for fn in [:before_update!, :update!, :after_update!]
+    @eval $fn(window::Window; t::Float64, dt::Float64) = length(window.scene_stack) > 0 ? $fn(window.scene_stack[end], t=t, dt=dt) : nothing
+end
+
 render!(window::Window; frame::Int, fps::Float64) = length(window.scene_stack) > 0 ? render!(window, window.scene_stack[end], frame=frame, fps=fps) : nothing
 
 function onevent!(scene::Scene, val::Val, e::Event)
@@ -114,11 +123,13 @@ function onevent!(scene::Scene, val::Val, e::Event)
     return scene
 end
 
-function update!(scene::Scene; t::Float64, dt::Float64)
-    for layer in scene.layers
-        update!(layer, t=t, dt=dt)
+for fn in [:before_update!, :update!, :after_update!]
+    @eval function $fn(scene::Scene; t::Float64, dt::Float64)
+        for layer in scene.layers
+            $fn(layer, t=t, dt=dt)
+        end
+        return scene
     end
-    return scene
 end
 
 function render!(window::Window, scene::Scene; frame::Int, fps::Float64)
@@ -137,10 +148,24 @@ function onevent!(layer::Layer, val::Val, e::Event)
     return layer
 end
 
-function update!(layer::Layer; t::Float64, dt::Float64)
+function before_update!(layer::Layer; t::Float64, dt::Float64)
     populate!(layer)
     for obj in layer.objects
+        before_update!(obj, t=t, dt=dt)
+    end
+    return layer
+end
+
+function update!(layer::Layer; t::Float64, dt::Float64)
+    for obj in layer.objects
         update!(obj, t=t, dt=dt)
+    end
+    return layer
+end
+
+function after_update!(layer::Layer; t::Float64, dt::Float64)
+    for obj in layer.objects
+        after_update!(obj, t=t, dt=dt)
     end
     cleanup!(layer)
     return layer
