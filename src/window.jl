@@ -108,7 +108,7 @@ end
 Layer(objects::OrderedSet{T}, args...; kwargs...) where {T} = Layer{T}(objects, args...; kwargs...)
 Layer(objects::Vector, args...; kwargs...) = Layer(OrderedSet(objects), args...; kwargs...)
 
-Base.show(io::IO, layer::Layer) = print(io, "Layer(", join([layer.objects, layer.show, layer.x, layer.y, layer.axes, layer.scale], ", "), ")")
+Base.show(io::IO, layer::Layer) = print(io, "Layer(", join([layer.objects, layer.x, layer.y, layer.θ], ", "), ")")
 
 Base.iterate(layer::Layer) = iterate(layer.objects)
 Base.iterate(layer::Layer, state) = iterate(layer.objects, state)

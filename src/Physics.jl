@@ -1,6 +1,6 @@
 module Physics
 
-using Gloria: AbstractObject, AbstractShape
+using Gloria: AbstractObject, AbstractShape, Layer
 
 import Gloria: after_update!, before_update!, render!, update!,
     intersects, transform
@@ -47,11 +47,30 @@ end
 
 rotate!(obj::PhysicalObject, θ′) = setangle!(obj, angle(obj) + θ′)
 
+function interact!(::PhysicalObject, ::PhysicalObject; t, dt) end
+
+##################################################
+# Gloria overrides
+##################################################
+
 function before_update!(obj::PhysicalObject; t::Float64, dt::Float64)
     vx, vy = velocity(obj)
     ω = angularvelocity(obj)
     translate!(obj, dt*vx, dt*vy)
     rotate!(obj, dt*ω)
+end
+
+function update!(layer::Layer{<:Physical}; t::Float64, dt::Float64)
+    for obj1 in layer.objects
+        for obj2 in layer.objects
+            if obj1 === obj2
+                update!(obj1, t=t, dt=dt)
+            else
+                interact!(obj1, obj2, t=t, dt=dt)
+            end
+        end
+    end
+    return layer
 end
 
 render!(canvas, obj::Physical; kwargs...) = render!(canvas, wrapped(obj), obj.x, obj.y, obj.θ; kwargs...)

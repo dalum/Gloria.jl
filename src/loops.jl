@@ -1,6 +1,6 @@
 const SLEEP_MAKEUP_TIME = 0.0011 # TODO: Calculate this automatically
-const GLOBAL_LOOP_LOCK = Channel{UInt8}(1)
-put!(GLOBAL_LOOP_LOCK, 0x01)
+const GLOBAL_LOOP_LOCK = [Channel{UInt8}(1)]
+put!(GLOBAL_LOOP_LOCK[], 0x01)
 
 macro loop(name::String, body::Expr)
     _loop(name, body)
@@ -20,17 +20,19 @@ function _loop(name::String, initialize::Expr, body::Expr, finalize::Expr = :())
                 $initialize
                 while length(window.scene_stack) > 0
                     t1 = time()
-                    _lock = take!($GLOBAL_LOOP_LOCK)
+                    _lock = take!($GLOBAL_LOOP_LOCK[])
                     $body
-                    put!($GLOBAL_LOOP_LOCK, _lock)
+                    put!($GLOBAL_LOOP_LOCK[], _lock)
                     _lock = 0x00
                     t2 = time()
                     sleep(max(1/target_speed - (t2 - t1) - $SLEEP_MAKEUP_TIME, 0.0))
                 end
                 $finalize
             catch e
-                println("ERROR ($($name)): ", sprint(showerror, e, stacktrace(catch_backtrace())))
-                _lock === 0x01 && put!($GLOBAL_LOOP_LOCK, _lock)
+                if !(e isa InvalidStateException)
+                    println("ERROR ($($name)): ", sprint(showerror, e, stacktrace(catch_backtrace())))
+                    _lock === 0x01 && put!($GLOBAL_LOOP_LOCK[], _lock)
+                end
             end
         end
     end
@@ -79,6 +81,18 @@ function run!(window::Window, loops::Pair{Float64,<:Function}...)
     append!(window.tasks, tasks)
     schedule.(tasks)
     return window
+end
+
+function reload!(window; target_event_speed::Float64 = 100.0, target_update_speed::Float64 = 60.0, target_render_speed::Float64 = 60.0)
+    close(GLOBAL_LOOP_LOCK[])
+    wait(window)
+    empty!(window.tasks)
+    GLOBAL_LOOP_LOCK[] = Channel{UInt8}(1)
+    put!(GLOBAL_LOOP_LOCK[], 0x01)
+    return run!(window,
+                target_event_speed => DEFAULT_EVENT_LOOP,
+                target_update_speed => DEFAULT_UPDATE_LOOP,
+                target_render_speed => DEFAULT_RENDER_LOOP)
 end
 
 struct InterruptQuit end

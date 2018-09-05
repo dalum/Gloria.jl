@@ -5,6 +5,7 @@ using Gloria: Gloria, AbstractObject, Audio, Circle, Event, Layer, Line, Scene, 
     add!, kill!, play!,
     intersects, iskey, ispressed
 
+import Gloria.Physics: interact!
 using Gloria.Physics: Physical
 
 using Colors: @colorant_str
@@ -93,17 +94,17 @@ function update!(self::Physical{LaserBeam}; t, dt)
     if time() >= self.wrapped.t1
         kill!(object_layer, self)
     end
+end
 
-    for other in object_layer
-        if other isa Physical{Rock} && intersects(self, other)
-            kill!(object_layer, self, other)
-            if other.wrapped.scale > 0.25
-                for _ in 1:2
-                    vx = 0.2self.vx + other.vx + (0.5-rand())*50
-                    vy = 0.2self.vy + other.vy + (0.5-rand())*50
-                    ω = other.ω + (0.5-rand())*50
-                    add!(object_layer, Physical{Rock}(other.wrapped.scale/2, other.x, other.y, vx, vy, 360rand(), ω))
-                end
+function interact!(self::Physical{LaserBeam}, other::Physical{Rock}; t, dt)
+    if intersects(self, other)
+        kill!(object_layer, self, other)
+        if other.wrapped.scale > 0.25
+            for _ in 1:2
+                vx = 0.2self.vx + other.vx + (0.5-rand())*50
+                vy = 0.2self.vy + other.vy + (0.5-rand())*50
+                ω = other.ω + (0.5-rand())*50
+                add!(object_layer, Physical{Rock}(other.wrapped.scale/2, other.x, other.y, vx, vy, 360rand(), ω))
             end
         end
     end
