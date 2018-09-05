@@ -1,6 +1,6 @@
 const SLEEP_MAKEUP_TIME = 0.0011 # TODO: Calculate this automatically
 const GLOBAL_LOOP_LOCK = Channel{UInt8}(1)
-put!(GLOBAL_LOOP_LOCK, 0x00)
+put!(GLOBAL_LOOP_LOCK, 0x01)
 
 macro loop(name::String, body::Expr)
     _loop(name, body)
@@ -15,23 +15,22 @@ function _loop(name::String, initialize::Expr, body::Expr, finalize::Expr = :())
     global GLOBAL_LOOP_LOCK
     quote
         function (window::Window, target_speed::Float64)
+            _lock = 0x00
             @task try
-                t = t0 = time()
-                dt = 0.0
                 $initialize
                 while length(window.scene_stack) > 0
                     t1 = time()
-                    __key = take!($GLOBAL_LOOP_LOCK)
-                    dt = time() - t
-                    t += dt
+                    _lock = take!($GLOBAL_LOOP_LOCK)
                     $body
-                    put!($GLOBAL_LOOP_LOCK, __key)
+                    put!($GLOBAL_LOOP_LOCK, _lock)
+                    _lock = 0x00
                     t2 = time()
                     sleep(max(1/target_speed - (t2 - t1) - $SLEEP_MAKEUP_TIME, 0.0))
                 end
                 $finalize
             catch e
                 println("ERROR ($($name)): ", sprint(showerror, e, stacktrace(catch_backtrace())))
+                _lock === 0x01 && put!($GLOBAL_LOOP_LOCK, _lock)
             end
         end
     end
@@ -44,13 +43,16 @@ const DEFAULT_EVENT_LOOP = @loop "event loop" (event_data = zeros(UInt8, 56)) wh
     onevent!(window, Val(event_type), event)
 end
 
-const DEFAULT_UPDATE_LOOP = @loop "update loop" begin
-    before_update!(window, t=(t - t0), dt=dt)
-    update!(window, t=(t - t0), dt=dt)
-    after_update!(window, t=(t - t0), dt=dt)
+const DEFAULT_UPDATE_LOOP = @loop "update loop" (t0 = time(); t = 0.0; dt = 0.0) begin
+    dt = min(t1 - t0, 2/target_speed)
+    t0 = t1
+    t += dt
+    before_update!(window, t=t, dt=dt)
+    update!(window, t=t, dt=dt)
+    after_update!(window, t=t, dt=dt)
 end
 
-const DEFAULT_RENDER_LOOP = @loop "render loop" (frame = 1; fps = 0.0; t00 = time()) begin
+const DEFAULT_RENDER_LOOP = @loop "render loop" (frame = 1; fps = 0.0; t0 = time()) begin
     if frame % target_speed == 0
         fps = target_speed / (time() - t0)
         t0 = time()

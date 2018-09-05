@@ -149,9 +149,11 @@ const player = Physical{Player}(100., 360.)
 
 add!(object_layer, player, Physical{Rock}(1., rand(-width/2:width/2), rand(-height/2:height/2), (0.5-randn())*50., (0.5-randn())*50., 360rand(), 360rand()))
 
-function main()
+function main(;keepalive=true)
     Gloria.run!(window)
-    wait(window)
+    if keepalive
+        wait(window)
+    end
 end
 
 ##################################################
