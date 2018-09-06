@@ -1,9 +1,9 @@
 module Asteroids
 
 import Gloria: onevent!, render!, update!
-using Gloria: Gloria, AbstractObject, Audio, Circle, Event, Layer, Line, Scene, Texture, Window,
+using Gloria: Gloria, AbstractObject, Audio, Circle, Event, Layer, Line, Point, Polygon, Scene, Texture, Window,
     add!, kill!, play!,
-    intersects, iskey, ispressed
+    intersects, isalive, iskey, ispressed
 
 import Gloria.Physics: interact!
 using Gloria.Physics: Physical
@@ -14,7 +14,9 @@ using Colors: @colorant_str
 # Types
 ##################################################
 
-struct Controls <: AbstractObject end
+mutable struct Controls <: AbstractObject
+    level::Int
+end
 
 abstract type AsteroidsObject <: AbstractObject end
 
@@ -36,19 +38,23 @@ end
 
 function Physical{Player}(a, α)
     model = Texture(window, abspath(@__DIR__, "..", "assets", "player.svg"), width=50, height=50)
-    shape = Circle(0., 0., 25.)
+    shape = Polygon(Point(-15., 0.), Point(-25., 15.), Point(25., 0.), Point(-25., -15.))
     return Physical(Player(model, a, α), shape)
 end
 
 function Physical{LaserBeam}(x, y, vx, vy, θ)
     model = Texture(window, abspath(@__DIR__, "..", "assets", "laser.svg"), width=50, height=4)
     shape = Line(-25., 0., 25., 0.)
+    shape = Point(0., 0.)
+    # shape = Gloria.extrude(shape, 200, 0, 0)
     return Physical(LaserBeam(model, time() + 1), shape; x=x, y=y, θ=θ, vx=vx, vy=vy)
 end
 
 function Physical{Rock}(scale, x, y, vx, vy, θ, ω)
     model = Texture(window, abspath(@__DIR__, "..", "assets", "rock.svg"), width=100, height=100)
-    shape = Circle(0., 0., 50scale)
+    #shape = Circle(0., 0., 50scale)
+    n = 12
+    shape = Polygon([Point((50cos(2π*i/n)+10randn())*scale, (50sin(2π*i/n)+10randn())*scale) for i in 0:(n-1)]...)
     return Physical(Rock(model, scale), shape, x=x, y=y, θ=θ, vx=vx, vy=vy, ω=ω)
 end
 
@@ -77,6 +83,15 @@ end
 # Update
 ##################################################
 
+function update!(self::Controls; t, dt)
+    if count(x->(x isa Physical{Rock} || x isa Physical{LaserBeam}), object_layer) == 0
+        self.level += 1
+        player.x, player.y = 0., 0.
+        player.vx, player.vy = 0., 0.
+        startlevel!(self.level)
+    end
+end
+
 function update!(self::Physical{Player}; t, dt)
     if ispressed(keyboard, "up")
         self.vx += self.wrapped.a*cosd(self.θ)*dt
@@ -90,6 +105,22 @@ function update!(self::Physical{Player}; t, dt)
     end
 end
 
+function interact!(self::Physical{Player}, other::Physical{Rock}; t, dt)
+    if intersects(self, other, dt)
+        kill!(object_layer, other)
+        if other.wrapped.scale > 0.25
+            for _ in 1:2
+                vx = other.vx + (0.5-rand())*50
+                vy = other.vy + (0.5-rand())*50
+                ω = other.ω + (0.5-rand())*50
+                add!(object_layer, Physical{Rock}(other.wrapped.scale/2, other.x, other.y, vx, vy, 360rand(), ω))
+            end
+        end
+        self.x, self.y = 0., 0.
+        self.vx, self.vy = 0., 0.
+    end
+end
+
 function update!(self::Physical{LaserBeam}; t, dt)
     if time() >= self.wrapped.t1
         kill!(object_layer, self)
@@ -97,12 +128,12 @@ function update!(self::Physical{LaserBeam}; t, dt)
 end
 
 function interact!(self::Physical{LaserBeam}, other::Physical{Rock}; t, dt)
-    if intersects(self, other)
+    if isalive(object_layer, self) && intersects(self, other, dt)
         kill!(object_layer, self, other)
         if other.wrapped.scale > 0.25
             for _ in 1:2
-                vx = 0.2self.vx + other.vx + (0.5-rand())*50
-                vy = 0.2self.vy + other.vy + (0.5-rand())*50
+                vx = 0.05self.vx/other.scale + other.vx
+                vy = 0.05self.vy/other.scale + other.vy
                 ω = other.ω + (0.5-rand())*50
                 add!(object_layer, Physical{Rock}(other.wrapped.scale/2, other.x, other.y, vx, vy, 360rand(), ω))
             end
@@ -121,12 +152,51 @@ end
 # Render
 ##################################################
 
-function render!(layer::Layer, self::AsteroidsObject, x, y, θ; frame::Int, fps::Float64)
-    render!(layer, self.model, x, y, θ)
+# function render!(layer::Layer, self::Physical{<:AsteroidsObject}; frame::Int, fps::Float64)
+#     render!(layer, self.model, self.x, self.y, self.θ)
+# end
+
+# function render!(layer::Layer, self::Physical{Rock}; frame::Int, fps::Float64)
+#     render!(layer, self.model, self.x, self.y, self.θ, scale=self.scale)
+# end
+
+function render!(layer::Layer, self::Physical{Player}; frame::Int, fps::Float64)
+    render!(layer, self.shape, self.x, self.y, self.θ, color=colorant"#C0C0C0")
 end
 
-function render!(layer::Layer, self::Rock, x, y, θ; frame::Int, fps::Float64)
-    render!(layer, self.model, x, y, θ, scale=self.scale)
+function render!(layer::Layer, self::Physical{LaserBeam}; frame::Int, fps::Float64)
+    render!(layer, self.shape, self.x, self.y, self.θ, color=colorant"#C0C0C0")
+end
+
+function render!(layer::Layer, self::Physical{Rock}; frame::Int, fps::Float64)
+    render!(layer, self.shape, self.x, self.y, self.θ, color=colorant"#A0A0A0")
+end
+
+###
+
+function addrock!(scale, v)
+    horv = rand(Bool)
+    rock = Physical{Rock}(scale,
+                          horv ? rand(-width/2:width/2) : rand([-width/2, width/2]),
+                          horv ? rand([-height/2, height/2]) : rand(-height/2:height/2),
+                          (0.5-randn())*v, (0.5-randn())*v, 360rand(), 90rand())
+    add!(object_layer, rock)
+end
+
+function startlevel!(level)
+    if level % 3 != 0
+        for _ in 1:level
+            addrock!(1., 30 + 5level)
+        end
+    elseif level % 6 != 0
+        for _ in 1:3*level
+            addrock!(0.25, 30 + 10level)
+        end
+    else
+        for _ in 1:level/3
+            addrock!(2.0, 30 + 5level)
+        end
+    end
 end
 
 ##################################################
@@ -136,11 +206,11 @@ end
 # const width, height = 1920, 1080
 const width, height = 800, 600
 const wrap_width, wrap_height = width + 100, height + 100
-const controls_layer = Layer([Controls()], show=false)
+const controls_layer = Layer([Controls(0)], show=false)
 
 const object_layer = Layer(Physical[], width/2, height/2)
 
-const scene = Scene(controls_layer, object_layer, color=colorant"black")
+const scene = Scene(controls_layer, object_layer, color=colorant"#202020")
 const window = Window("Asteroids", width, height, scene, fullscreen=false)
 const keyboard = Gloria.KeyboardState()
 
@@ -148,7 +218,7 @@ const laser_sound = Audio(window, abspath(@__DIR__, "..", "assets", "laser.wav")
 
 const player = Physical{Player}(100., 360.)
 
-add!(object_layer, player, Physical{Rock}(1., rand(-width/2:width/2), rand(-height/2:height/2), (0.5-randn())*50., (0.5-randn())*50., 360rand(), 360rand()))
+add!(object_layer, player)
 
 function main(;keepalive=true)
     Gloria.run!(window)

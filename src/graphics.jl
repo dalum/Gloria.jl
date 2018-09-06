@@ -58,8 +58,8 @@ function render!(window::Window, layer::AbstractLayer, r::RenderTask{<:Texture})
     render!(window, r.source, round(Int, x), round(Int, y), r.θ, scale, scale, r.offset_x, r.offset_y, r.flip)
 end
 
-function render!(layer::Layer, texture::Texture, x, y, θ = 0.0; scale = 1.0, offset_x = 0, offset_y = 0, flip::Symbol = :none)
-    push!(layer.render_tasks, RenderTask(texture, x, y, θ, scale, offset_x, offset_y, flip))
+function render!(layer::Layer, texture::Texture, x, y, θ = 0.0; scale = 1.0, offset_x = 0, offset_y = 0, flip::Symbol = :none, color = colorant"black")
+    push!(layer.render_tasks, RenderTask(texture, x, y, θ, scale, offset_x, offset_y, flip, color))
     return layer
 end
 
@@ -99,34 +99,50 @@ end
 
 ##################################################
 
-function render!(window::Window, p::Point, x, y; scale = 1.0)
+function render!(window::Window, p::Point, x, y, θ = 0.0; scale = 1.0, color)
+    setcolor!(window, color)
     drawpoint!(window, round(Int, x + p.x), round(Int, y + p.y))
 end
 
-function render!(window::Window, l::Line, x, y; scale = 1.0)
-    x1 = x + l.x1*scale
-    x2 = x + l.x2*scale
-    y1 = y + l.y1*scale
-    y2 = y + l.y2*scale
+function render!(window::Window, l::Line, x, y, θ = 0.0; scale = 1.0, color)
+    setcolor!(window, color)
+    l = transform(l, x, y, θ)
+    x1 = l.x1*scale
+    x2 = l.x2*scale
+    y1 = l.y1*scale
+    y2 = l.y2*scale
     drawline!(window, round(Int, x1), round(Int, y1), round(Int, x2), round(Int, y2))
 end
 
-function render!(window::Window, p::Polygon, x, y; scale = 1.0)
+function render!(window::Window, c::Circle, x, y, θ = 0.0; scale = 1.0, samples::Int = 12, color)
+    setcolor!(window, color)
+    c = transform(c, x, y, θ)
+    r = c.r*scale
+    for n in 1:samples
+        drawline!(window, round(Int, c.x + cos(2π*(n-1)/samples)*c.r),
+                  round(Int, c.y + sin(2π*(n-1)/samples)*c.r),
+                  round(Int, c.x + cos(2π*n/samples)*c.r),
+                  round(Int, c.y + sin(2π*n/samples)*c.r))
+    end
+    return window
+end
+
+function render!(window::Window, p::Polygon, x, y, θ = 0.0; scale = 1.0, color)
     for line in p.lines
-        render!(window, line, x, y, scale=scale)
+        render!(window, line, x, y, θ, scale=scale, color=color)
     end
     return window
 end
 
-function render!(window::Window, cs::CompositeShape, x, y; scale = 1.0)
+function render!(window::Window, cs::CompositeShape, x, y, θ = 0.0; scale = 1.0, color)
     for shape in cs.shapes
-        render!(window, shape, x, y, scale=scale)
+        render!(window, shape, x, y, θ, scale=scale, color=color)
     end
     return window
 end
 
-function render!(layer::Layer, shape::AbstractShape, x, y, θ = 0.0; scale = 1.0, offset_x = 0, offset_y = 0, flip::Symbol = :none)
-    push!(layer.render_tasks, RenderTask(shape, x, y, θ, scale, offset_x, offset_y, flip))
+function render!(layer::Layer, shape::AbstractShape, x, y, θ = 0.0; scale = 1.0, offset_x = 0, offset_y = 0, flip::Symbol = :none, color = colorant"white")
+    push!(layer.render_tasks, RenderTask(shape, x, y, θ, scale, offset_x, offset_y, flip, color))
     return layer
 end
 
@@ -134,5 +150,5 @@ function render!(window::Window, layer::AbstractLayer, r::RenderTask{<:AbstractS
     x = r.x*layer.scale + layer.x
     y = r.y*layer.scale + layer.y
     scale = layer.scale*r.scale
-    render!(window, r.source, x, y, scale=scale)
+    render!(window, r.source, x, y, r.θ, scale=scale, color=r.color)
 end

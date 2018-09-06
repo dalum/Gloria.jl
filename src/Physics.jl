@@ -3,7 +3,7 @@ module Physics
 using Gloria: AbstractObject, AbstractShape, Layer
 
 import Gloria: after_update!, before_update!, render!, update!,
-    intersects, transform, simplest
+    extrude, intersects, transform, simplest
 
 abstract type PhysicalObject <: AbstractObject end
 
@@ -85,17 +85,18 @@ function update!(layer::Layer{<:Physical}; t::Float64, dt::Float64)
     return layer
 end
 
-render!(canvas, obj::Physical; kwargs...) = render!(canvas, wrapped(obj), obj.x, obj.y, obj.θ; kwargs...)
-
 intersects(obj1::PhysicalObject, obj2::PhysicalObject) = intersects(transform(obj1.shape, obj1.x, obj1.y, obj1.θ), transform(obj2.shape, obj2.x, obj2.y, obj2.θ))
 
-function collisionpoint(obj1::PhysicalObject, obj2::PhysicalObject, dt::Float64)
-    shape1 = transform(obj1.shape, obj1.x, obj1.y, obj1.θ)
-    shape2 = transform(obj2.shape, obj2.x, obj2.y, obj2.θ)
-    sshape = simplest(shape1, shape2)
-    sobj = sshape === shape1 ? obj1 : obj2
-    eshape = extrude(sshape, -sobj.vx*dt, -sobj.vy*dt, -sobj.ω*dt)
-    collisionpoint(transform(obj1.shape, obj1.x, obj1.y, obj1.θ), transform(obj2.shape, obj2.x, obj2.y, obj2.θ), dt)
+function intersects(obj1::PhysicalObject, obj2::PhysicalObject, dt::Float64)
+    (sobj, aobj) = simplest(obj1.shape, obj2.shape) === obj1.shape ? (obj1, obj2) : (obj2, obj1)
+    Δx, Δy = sobj.x - aobj.x, sobj.y - aobj.y
+    vxdt = -(sobj.vx - aobj.vx + Δy*aobj.ω*π/180)*dt
+    vydt = -(sobj.vy - aobj.vy - Δx*aobj.ω*π/180)*dt
+    sshape = transform(sobj.shape, 0., 0., sobj.θ)
+    sshape = extrude(sshape, vxdt, vydt, -sobj.ω*dt)
+    sshape = transform(sshape, Δx, Δy, 0.)
+    ashape = transform(aobj.shape, 0, 0, aobj.θ)
+    return intersects(sshape, ashape)
 end
 
 end #module

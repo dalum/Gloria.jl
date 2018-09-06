@@ -94,7 +94,7 @@ simplest(cs::CompositeShape, ::Circle) = cs
 transform(p::Point, x, y, θ) = Point(x + cosd(θ)*p.x - sind(θ)*p.y, y + sind(θ)*p.x + cosd(θ)*p.y)
 transform(c::Circle, x, y, θ) = Circle(x + cosd(θ)*c.x - sind(θ)*c.y, y + sind(θ)*c.x + cosd(θ)*c.y, c.r)
 transform(l::Line, x, y, θ) = Line(x + cosd(θ)*l.x1 - sind(θ)*l.y1, y + sind(θ)*l.x1 + cosd(θ)*l.y1, x + cosd(θ)*l.x2 - sind(θ)*l.y2, y + sind(θ)*l.x2 + cosd(θ)*l.y2, l.t_min, l.t_max)
-transform(p::Polygon, x, y, θ) = Polygon(transform.(p.points, x, y, θ), transform.(p.lines, x, y, θ))
+transform(m::Polygon{N,T}, x, y, θ) where {N,T} = Polygon{N,T}(transform.(m.points, x, y, θ), transform.(m.lines, x, y, θ))
 transform(cs::CompositeShape, x, y, θ) = CompositeShape(transform.(cs.shapes, x, y, θ))
 
 """
@@ -113,6 +113,14 @@ end
 
 extrude(m::Polygon, x, y, θ) = CompositeShape(extrude.(m.lines, x, y, θ))
 extrude(cs::CompositeShape, x, y, θ) = CompositeShape(extrude.(cs.shapes, x, y, θ))
+
+# Poor man's extrusion
+function extrude(c::Circle, x, y, θ; subsamples::Int = 4)
+    dx = x / subsamples
+    dy = y / subsamples
+    dθ = θ / subsamples
+    return CompositeShape([transform(c, dx*i, dy*i, dθ*i) for i in 0:subsamples])
+end
 
 """
     intersects(shape1, shape2)
@@ -166,5 +174,12 @@ function intersects(l::Line, c::Circle)
     return l.t_min <= d1 <= l.t_max || l.t_min <= d2 <= l.t_max
 end
 
+intersects(m::Polygon, a::Union{<:Point,<:Line,<:Circle}) = intersects(a, m)
+intersects(cs::CompositeShape, a::Union{<:Point,<:Line,<:Circle}) = intersects(a, cs)
 intersects(a::Union{<:Point,<:Line,<:Circle}, m::Polygon) = any(l->intersects(a, l), m.lines)
 intersects(a::Union{<:Point,<:Line,<:Circle}, cs::CompositeShape) = any(s->intersects(a, s), cs.shapes)
+
+intersects(m1::Polygon, m2::Polygon) = any(l->intersects(l, m2), m1.lines)
+intersects(m::Polygon, cs::CompositeShape) = any(l->intersects(l, cs), m.lines)
+intersects(cs::CompositeShape, m::Polygon) = intersects(m, cs)
+intersects(cs1::CompositeShape, cs2::CompositeShape) = any(s->intersects(s, cs2), cs1.shapes)

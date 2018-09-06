@@ -83,6 +83,7 @@ struct RenderTask{T}
     offset_x::Int
     offset_y::Int
     flip::Symbol
+    color::Colors.RGB
 end
 
 """
@@ -148,6 +149,10 @@ Base.pop!(scene::AbstractScene) = pop!(scene.layers)
 Base.append!(scene::AbstractScene, layers::AbstractVector{<:AbstractLayer}) = append!(scene.layers, layers)
 Base.push!(layer::Layer, objs...) = (push!(layer.objects, objs...); layer)
 Base.delete!(layer::Layer, obj) = (delete!(layer.objects, obj); layer)
+
+Base.getindex(layer::Layer, index) = getindex(layer.objects, index)
+
+isalive(layer::Layer, obj) = (obj in layer.objects && !(obj in layer.dead_objects))
 
 """
 
