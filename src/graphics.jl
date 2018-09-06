@@ -9,6 +9,7 @@ setcolor!(window::Window, color::Colors.Color3) = setcolor!(window, color, 255)
 setcolor!(window::Window, color::Colors.Color3, a::Int) = setcolor!(window, round(Int, color.r * 255), round(Int, color.g * 255), round(Int, color.b * 255), a)
 
 """
+    clear!(window)
 
 Fill `window` with the currently selected color.
 
@@ -16,10 +17,23 @@ Fill `window` with the currently selected color.
 clear!(window::Window) = SDL.RenderClear(window.render_ptr)
 
 """
+    present!(window)
 
-render!(window::Window, texture::Texture, x, y, args...)
+Update `window` to display all render operations since the last call
+to `present!`.
 
-Render `texture` onto `window`'s surface with the texture centered at `x` and `y`.
+"""
+present!(window::Window) = SDL.RenderPresent(window.render_ptr)
+
+##################################################
+# Textures
+##################################################
+
+"""
+    render!(window::Window, texture::Texture, x, y, args...)
+
+Render `texture` onto `window`'s surface with the texture centered at
+`x` and `y`.
 
 """
 function render!(window::Window, texture::Texture{SDL.Texture}, x::Int, y::Int, θ::Float64 = 0.0, scale_x::Float64 = 1.0, scale_y::Float64 = 1.0, offset_x::Int = 0, offset_y::Int = 0, flip::Symbol = :none)
@@ -44,6 +58,15 @@ function render!(window::Window, layer::AbstractLayer, r::RenderTask{<:Texture})
     render!(window, r.source, round(Int, x), round(Int, y), r.θ, scale, scale, r.offset_x, r.offset_y, r.flip)
 end
 
+function render!(layer::Layer, texture::Texture, x, y, θ = 0.0; scale = 1.0, offset_x = 0, offset_y = 0, flip::Symbol = :none)
+    push!(layer.render_tasks, RenderTask(texture, x, y, θ, scale, offset_x, offset_y, flip))
+    return layer
+end
+
+##################################################
+# Shapes
+##################################################
+
 """
 """
 function drawrect!(window::Window, x::Int, y::Int, w::Int, h::Int)
@@ -62,19 +85,54 @@ end
 
 """
 """
-drawline!(window::Window, x1::Int, y1::Int, x2::Int, y2::Int) = SDL.RenderDrawLine(window.render_ptr, Int32(x1), Int32(y1), Int32(x2), Int32(y2))
-
-drawline!(window::Window, l::Line) = drawline!(window, round(Int, l.x1), round(Int, l.y1), round(Int, l.x2), round(Int, l.y2))
-
-"""
-"""
-drawpoint!(window::Window, (x, y)::Tuple{Int,Int}) = SDL.RenderDrawPoint(window.render_ptr, Int32(x), Int32(y))
+function drawpoint!(window::Window, x::Int, y::Int)
+    SDL.RenderDrawPoint(window.render_ptr, Int32(x), Int32(y))
+    return window
+end
 
 """
 """
-present!(window::Window) = SDL.RenderPresent(window.render_ptr)
+function drawline!(window::Window, x1::Int, y1::Int, x2::Int, y2::Int)
+    SDL.RenderDrawLine(window.render_ptr, Int32(x1), Int32(y1), Int32(x2), Int32(y2))
+    return window
+end
 
-function render!(layer::Layer, texture::Texture, x, y, θ = 0.0; scale = 1.0, offset_x = 0, offset_y = 0, flip::Symbol = :none)
-    push!(layer.render_tasks, RenderTask(texture, x, y, θ, scale, offset_x, offset_y, flip))
+##################################################
+
+function render!(window::Window, p::Point, x, y; scale = 1.0)
+    drawpoint!(window, round(Int, x + p.x), round(Int, y + p.y))
+end
+
+function render!(window::Window, l::Line, x, y; scale = 1.0)
+    x1 = x + l.x1*scale
+    x2 = x + l.x2*scale
+    y1 = y + l.y1*scale
+    y2 = y + l.y2*scale
+    drawline!(window, round(Int, x1), round(Int, y1), round(Int, x2), round(Int, y2))
+end
+
+function render!(window::Window, p::Polygon, x, y; scale = 1.0)
+    for line in p.lines
+        render!(window, line, x, y, scale=scale)
+    end
+    return window
+end
+
+function render!(window::Window, cs::CompositeShape, x, y; scale = 1.0)
+    for shape in cs.shapes
+        render!(window, shape, x, y, scale=scale)
+    end
+    return window
+end
+
+function render!(layer::Layer, shape::AbstractShape, x, y, θ = 0.0; scale = 1.0, offset_x = 0, offset_y = 0, flip::Symbol = :none)
+    push!(layer.render_tasks, RenderTask(shape, x, y, θ, scale, offset_x, offset_y, flip))
     return layer
+end
+
+function render!(window::Window, layer::AbstractLayer, r::RenderTask{<:AbstractShape})
+    x = r.x*layer.scale + layer.x
+    y = r.y*layer.scale + layer.y
+    scale = layer.scale*r.scale
+    render!(window, r.source, x, y, scale=scale)
 end

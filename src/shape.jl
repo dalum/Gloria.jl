@@ -10,7 +10,12 @@ struct Line{T} <: AbstractShape
     y1::T
     x2::T
     y2::T
+    t_min::T
+    t_max::T
 end
+Line(p1::Point{T}, p2::Point{T}) where T = Line(p1.x, p1.y, p2.x, p2.y, zero(T), one(T))
+Line(x1::T, y1::T, x2::T, y2::T) where T = Line(x1, y1, x2, y2, zero(T), one(T))
+Line(x::T, y::T, θ::T; t_min::T = convert(T, -Inf), t_max::T = convert(T, Inf)) where T = Line(x, y, x + cos(θ), y + sin(θ), t_min, t_max)
 
 struct Circle{T} <: AbstractShape
     x::T
@@ -18,24 +23,100 @@ struct Circle{T} <: AbstractShape
     r::T
 end
 
-struct Polygon{T} <: AbstractShape
+struct Polygon{N,T} <: AbstractShape
+    points::Vector{Point{T}}
     lines::Vector{Line{T}}
 end
-function Polygon(points::Vector{Point{T}}) where {T}
+function Polygon(point::Point{T}, points::Point{T}...) where {T}
     lines = Line{T}[]
-    p0 = points[0]
-    for p1 in points[2:end]
+    p0 = point
+    for p1 in points[1:end]
         push!(lines, Line(p0.x, p0.y, p1.x, p1.y))
         p0 = p1
     end
-    return Polygon(lines)
+    if length(points) > 1
+        push!(lines, Line(p0.x, p0.y, point.x, point.y))
+    end
+    points_ = [point]
+    append!(points_, collect(points))
+    return Polygon{length(points_),T}(points_, lines)
 end
 
+struct CompositeShape{T<:AbstractShape} <: AbstractShape
+    shapes::Vector{T}
+end
+
+
+"""
+    points(shape)
+"""
+points(p::Point) = [p]
+points(l::Line) = [Point(l.x1, l.y1), Point(l.x2, l.y2)]
+points(m::Polygon) = m.points
+points(s::CompositeShape) = vcat([points(shape) for shape in s.shapes]...)
+
+"""
+    simplest(shape1, shape2)
+"""
+simplest(p::Point, ::Point) = p
+simplest(p::Point, ::Line) = p
+simplest(p::Point, ::Polygon) = p
+simplest(p::Point, ::Circle) = p
+simplest(p::Point, ::CompositeShape) = p
+
+simplest(::Line, p::Point) = p
+simplest(l::Line, ::Line) = l
+simplest(l::Line, m::Polygon{N}) where {N} = N < 2 ? m : l
+simplest(l::Line, ::Circle) = l
+simplest(l::Line, ::CompositeShape) = l
+
+simplest(::Polygon, p::Point) = p
+simplest(m::Polygon{N}, l::Line) where {N} = N < 2 ? m : l
+simplest(m1::Polygon{N}, m2::Polygon{M}) where {N,M} = N < M ? m1 : m2
+simplest(m::Polygon, ::Circle) = m
+simplest(m::Polygon, ::CompositeShape) = m
+
+simplest(::Circle, p::Point) = p
+simplest(::Circle, l::Line) = l
+simplest(::Circle, m::Polygon) = m
+simplest(c::Circle, ::Circle) = c
+simplest(::Circle, cs::CompositeShape) = cs
+
+simplest(::CompositeShape, p::Point) = p
+simplest(::CompositeShape, l::Line) = l
+simplest(::CompositeShape, m::Polygon) = m
+simplest(cs::CompositeShape, ::CompositeShape) = cs
+simplest(cs::CompositeShape, ::Circle) = cs
+
+"""
+    transform(shape)
+"""
 transform(p::Point, x, y, θ) = Point(x + cosd(θ)*p.x - sind(θ)*p.y, y + sind(θ)*p.x + cosd(θ)*p.y)
 transform(c::Circle, x, y, θ) = Circle(x + cosd(θ)*c.x - sind(θ)*c.y, y + sind(θ)*c.x + cosd(θ)*c.y, c.r)
-transform(l::Line, x, y, θ) = Line(x + cosd(θ)*l.x1 - sind(θ)*l.y1, y + sind(θ)*l.x1 + cosd(θ)*l.y1, x + cosd(θ)*l.x2 - sind(θ)*l.y2, y + sind(θ)*l.x2 + cosd(θ)*l.y2)
-transform(p::Polygon, x, y, θ) = Polygon(transform.(p.lines, x, y, θ))
+transform(l::Line, x, y, θ) = Line(x + cosd(θ)*l.x1 - sind(θ)*l.y1, y + sind(θ)*l.x1 + cosd(θ)*l.y1, x + cosd(θ)*l.x2 - sind(θ)*l.y2, y + sind(θ)*l.x2 + cosd(θ)*l.y2, l.t_min, l.t_max)
+transform(p::Polygon, x, y, θ) = Polygon(transform.(p.points, x, y, θ), transform.(p.lines, x, y, θ))
+transform(cs::CompositeShape, x, y, θ) = CompositeShape(transform.(cs.shapes, x, y, θ))
 
+"""
+    extrude(shape, x, y, θ)
+"""
+extrude(p::Point, x, y, θ) = Line(p, transform(p, x, y, θ))
+
+function extrude(l1::Line{T}, x, y, θ) where T
+    l2 = transform(l1, x, y, θ)
+    p1, p2 = points(l1)
+    p3, p4 = points(l2)
+    l3 = Line(p1, p3)
+    l4 = Line(p2, p4)
+    return Polygon{4,T}([p1, p2, p3, p4], [l1, l2, l3, l4])
+end
+
+extrude(m::Polygon, x, y, θ) = CompositeShape(extrude.(m.lines, x, y, θ))
+extrude(cs::CompositeShape, x, y, θ) = CompositeShape(extrude.(cs.shapes, x, y, θ))
+
+"""
+    intersects(shape1, shape2)
+"""
 intersects(p1::Point, p2::Point) = p1.x == p2.x && p1.y == p2.y
 intersects(c1::Circle, c2::Circle) = sqrt((c2.x - c1.x)^2 + (c2.y - c1.y)^2) <= c1.r + c2.r
 intersects(p::Point, c::Circle) = sqrt((c.x - p.x)^2 + (c.y - p.y)^2) <= c.r
@@ -50,24 +131,24 @@ function intersects(p::Point, l::Line)
     d1 = b1 / a1
     d2 = b2 / a2
 
-    a1 == b1 == 0 && return 0 <= d2 <= 1
-    a2 == b2 == 0 && return 0 <= d1 <= 1
+    a1 == b1 == 0 && return l.t_min <= d2 <= l.t_max
+    a2 == b2 == 0 && return l.t_min <= d1 <= l.t_max
 
-    return d1 === d2 && 0 <= d1 <= 1 || 0 <= d2 <= 1
+    return d1 === d2 && l.t_min <= d1 <= l.t_max || l.t_min <= d2 <= l.t_max
 end
 
 function intersects(l1::Line, l2::Line)
     # From https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
-    t = (l1.x1 - l2.x1)*(l2.y1 - l2.y2) - (l1.y1 - l2.y1)*(l2.x1 - l2.x2)
+    t1 = (l1.x1 - l2.x1)*(l2.y1 - l2.y2) - (l1.y1 - l2.y1)*(l2.x1 - l2.x2)
+    t2 = (l1.x1 - l2.x1)*(l1.y1 - l1.y2) - (l1.y1 - l2.y1)*(l1.x1 - l1.x2)
     d = (l1.x1 - l1.x2)*(l2.y1 - l2.y2) - (l1.y1 - l1.y2)*(l2.x1 - l2.x2)
-    u = (l1.y1 - l1.y2)*(l1.x1 - l2.x1) - (l1.x1 - l1.x2)*(l1.y1 - l2.y1)
 
     # Parallel lines
-    if iszero(t) && iszero(u) && iszero(d)
+    if iszero(t1) && iszero(t2) && iszero(d)
         return intersects(l1, Point(l2.x1, l2.y1)) || intersects(l1, Point(l2.x2, l2.y2))
     end
 
-    return 0 <= t/d <= 1 && 0 <= u/d <= 1
+    return l1.t_min <= t1/d <= l1.t_max && l2.t_min <= t2/d <= l2.t_max
 end
 
 intersects(c::Circle, l::Line) = intersects(l, c)
@@ -82,8 +163,8 @@ function intersects(l::Line, c::Circle)
     d1 = (-a + sqrt(a^2 - l²*b)) / l²
     d2 = (-a - sqrt(a^2 - l²*b)) / l²
 
-    # 0 <= d1 <= 1 && println((l.x1*(1 - d1) + l.x2*d1, l.y1*(1 - d1) + l.y2*d1))
-    # 0 <= d2 <= 1 && println((l.x1*(1 - d2) + l.x2*d2, l.y1*(1 - d2) + l.y2*d2))
-
-    return 0 <= d1 <= 1 || 0 <= d2 <= 1
+    return l.t_min <= d1 <= l.t_max || l.t_min <= d2 <= l.t_max
 end
+
+intersects(a::Union{<:Point,<:Line,<:Circle}, m::Polygon) = any(l->intersects(a, l), m.lines)
+intersects(a::Union{<:Point,<:Line,<:Circle}, cs::CompositeShape) = any(s->intersects(a, s), cs.shapes)

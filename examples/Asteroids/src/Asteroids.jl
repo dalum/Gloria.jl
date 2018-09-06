@@ -18,18 +18,18 @@ struct Controls <: AbstractObject end
 
 abstract type AsteroidsObject <: AbstractObject end
 
-struct Player <: AsteroidsObject
+mutable struct Player <: AsteroidsObject
     model::Texture
     a::Float64
     α::Float64
 end
 
-struct LaserBeam <: AsteroidsObject
+mutable struct LaserBeam <: AsteroidsObject
     model::Texture
     t1::Float64
 end
 
-struct Rock <: AsteroidsObject
+mutable struct Rock <: AsteroidsObject
     model::Texture
     scale::Float64
 end

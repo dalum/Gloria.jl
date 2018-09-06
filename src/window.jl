@@ -74,7 +74,7 @@ end
 Scene(layer::AbstractLayer, layers::AbstractLayer...; color=Colors.colorant"dark gray") = Scene([layer, layers...], color)
 Scene(layers::T) where {T<:AbstractVector{<:AbstractLayer}} = Scene(layers, Colors.colorant"dark gray")
 
-struct RenderTask{T <: AbstractResource}
+struct RenderTask{T}
     source::T
     x::Float64
     y::Float64

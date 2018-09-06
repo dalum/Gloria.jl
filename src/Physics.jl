@@ -3,7 +3,7 @@ module Physics
 using Gloria: AbstractObject, AbstractShape, Layer
 
 import Gloria: after_update!, before_update!, render!, update!,
-    intersects, transform
+    intersects, transform, simplest
 
 abstract type PhysicalObject <: AbstractObject end
 
@@ -23,6 +23,18 @@ mutable struct Physical{T <: AbstractObject} <: PhysicalObject
     ω::Float64
 end
 Physical(wrapped::T, shape; m=0., I=0., x=0., y=0., θ=0., vx=0., vy=0., ω=0.) where {T} = Physical(wrapped, shape, m, I, x, y, θ, vx, vy, ω)
+
+@inline Base.getproperty(obj::Physical, v::Symbol) = _getproperty(obj, Val(v))
+@inline _getproperty(obj::Physical, ::Val{V}) where V = Core.getfield(obj.wrapped, V)
+for v in [:(:wrapped), :(:shape), :(:m), :(:I), :(:x), :(:y), :(:θ), :(:vx), :(:vy), :(:ω)]
+    @eval @inline _getproperty(obj::Physical, ::Val{$v}) = Core.getfield(obj, $v)
+end
+
+@inline Base.setproperty!(obj::Physical, v::Symbol, x) = _setproperty!(obj, Val(v), x)
+@inline _setproperty!(obj::Physical, ::Val{V}, x) where V = Core.setfield!(obj.wrapped, V, x)
+for v in [:(:wrapped), :(:shape), :(:m), :(:I), :(:x), :(:y), :(:θ), :(:vx), :(:vy), :(:ω)]
+    @eval @inline _setproperty!(obj::Physical, ::Val{$v}, x) = Core.setfield!(obj, $v, x)
+end
 
 wrapped(obj::Physical) = obj.wrapped
 
@@ -76,5 +88,14 @@ end
 render!(canvas, obj::Physical; kwargs...) = render!(canvas, wrapped(obj), obj.x, obj.y, obj.θ; kwargs...)
 
 intersects(obj1::PhysicalObject, obj2::PhysicalObject) = intersects(transform(obj1.shape, obj1.x, obj1.y, obj1.θ), transform(obj2.shape, obj2.x, obj2.y, obj2.θ))
+
+function collisionpoint(obj1::PhysicalObject, obj2::PhysicalObject, dt::Float64)
+    shape1 = transform(obj1.shape, obj1.x, obj1.y, obj1.θ)
+    shape2 = transform(obj2.shape, obj2.x, obj2.y, obj2.θ)
+    sshape = simplest(shape1, shape2)
+    sobj = sshape === shape1 ? obj1 : obj2
+    eshape = extrude(sshape, -sobj.vx*dt, -sobj.vy*dt, -sobj.ω*dt)
+    collisionpoint(transform(obj1.shape, obj1.x, obj1.y, obj1.θ), transform(obj2.shape, obj2.x, obj2.y, obj2.θ), dt)
+end
 
 end #module
