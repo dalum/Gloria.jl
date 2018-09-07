@@ -113,6 +113,7 @@ Base.show(io::IO, layer::Layer) = print(io, "Layer(", join([layer.objects, layer
 
 Base.iterate(layer::Layer) = iterate(layer.objects)
 Base.iterate(layer::Layer, state) = iterate(layer.objects, state)
+Base.filter(f, layer::Layer) = filter(f, layer.objects)
 
 """
     wait(window::Window)
@@ -181,3 +182,5 @@ function cleanup!(layer::Layer)
     empty!(layer.dead_objects)
     return layer
 end
+
+tocoordinates(layer::Layer, x, y) = x - layer.x, y - layer.y

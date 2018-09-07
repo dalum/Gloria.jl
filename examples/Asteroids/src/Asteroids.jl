@@ -62,18 +62,18 @@ end
 # Events
 ##################################################
 
-function onevent!(::Controls, ::Val{:key_down}, e::Event)
+function onevent!(::Controls, e::Event{:key_down})
     iskey(e, "escape") && Gloria.quit!(window, e)
 end
 
-function onevent!(self::Physical{Player}, ::Val{:key_down}, e::Event)
+function onevent!(self::Physical{Player}, e::Event{:key_down})
     if iskey(e, "space")
         play!(laser_sound, volume=10)
         add!(object_layer, Physical{LaserBeam}(self.x, self.y, self.vx + cosd(self.θ)*500, self.vy + sind(self.θ)*500, self.θ))
     end
 end
 
-function onevent!(self::Physical{Player}, ::Val{:key_up}, e::Event)
+function onevent!(self::Physical{Player}, e::Event{:key_up})
     if iskey(e, "right") || iskey(e, "left")
         self.ω = 0.
     end

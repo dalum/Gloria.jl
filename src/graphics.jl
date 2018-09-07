@@ -127,7 +127,7 @@ function render!(window::Window, c::Circle, x, y, θ = 0.0; scale = 1.0, samples
     return window
 end
 
-function render!(window::Window, p::Polygon, x, y, θ = 0.0; scale = 1.0, color)
+function render!(window::Window, p::PolygonOrLines, x, y, θ = 0.0; scale = 1.0, color)
     for line in p.lines
         render!(window, line, x, y, θ, scale=scale, color=color)
     end

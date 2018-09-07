@@ -1,8 +1,8 @@
-struct Event
+struct Event{TYPE}
     fields::Dict{Symbol, Any}
 end
-Event() = Event(Dict{Symbol, Any}())
-Event(pairs::Pair...) = Event(Dict{Symbol, Any}(pairs...))
+Event{TYPE}() where {TYPE} = Event{TYPE}(Dict{Symbol, Any}())
+Event{TYPE}(pairs::Pair...) where {TYPE}  = Event{TYPE}(Dict{Symbol, Any}(pairs...))
 
 Base.getproperty(e::Event, name::Symbol) = getfield(e, :fields)[name]
 Base.setproperty!(e::Event, name::Symbol, x) = setindex!(getfield(e, :fields), x, name)
@@ -16,8 +16,8 @@ function bitcat(::Type{T}, arr)::T where T<:Number
     out
 end
 
-function geteventdata(data::Vector{UInt8}, pairs::Pair{Symbol,DataType}...)
-    e = Event()
+function geteventdata(TYPE::Symbol, data::Vector{UInt8}, pairs::Pair{Symbol,DataType}...)
+    e = Event{TYPE}()
     i = 1
     for pair in pairs
         s = sizeof(pair.second)
@@ -30,9 +30,8 @@ end
 eventtype(data::Vector{UInt8}) = bitcat(UInt32, data[4:-1:1])
 
 parseevent(window::Window, data::Vector{UInt8}) = parseevent(window, Val(eventtype(data)), data)
-parseevent(window::Window, ::Val, data::Vector{UInt8}) = (:notsupported, Event())
+parseevent(window::Window, ::Val, data::Vector{UInt8}) = Event{:notsupported}()
 
 function parseevent(window::Window, ::Val{SDL.QUIT}, data::Vector{UInt8})
-    e = geteventdata(data, :type => UInt32, :timestamp => UInt32)
-    return (:quit, e)
+    return geteventdata(:quit, data, :type => UInt32, :timestamp => UInt32)
 end

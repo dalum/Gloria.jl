@@ -1,0 +1,3 @@
+#!/bin/sh
+
+julia $1 --project run.jl

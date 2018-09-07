@@ -41,8 +41,8 @@ end
 # Default loops
 
 const DEFAULT_EVENT_LOOP = @loop "event loop" (event_data = zeros(UInt8, 56)) while SDL.PollEvent(event_data) != 0
-    event_type, event = parseevent(window, event_data)
-    onevent!(window, Val(event_type), event)
+    event = parseevent(window, event_data)
+    onevent!(window, event)
 end
 
 const DEFAULT_UPDATE_LOOP = @loop "update loop" (t0 = time(); t = 0.0; dt = 0.0) begin
@@ -108,7 +108,7 @@ optionally interrupting the call by returning `InterruptQuit()`.
 function quit!(window::Window, e::Event)
     while length(window.scene_stack) > 0
         scene = pop!(window)
-        if onevent!(scene, Val(:quit), e) === InterruptQuit()
+        if onevent!(scene, e) === InterruptQuit()
             push!(window, scene)
             return InterruptQuit()
         end
@@ -116,15 +116,15 @@ function quit!(window::Window, e::Event)
     destroy!(window)
 end
 
-function onevent!(::AbstractObject, ::Val, ::Event) end
+function onevent!(::AbstractObject, ::Event) end
 for fn in [:before_update!, :update!, :after_update!]
     @eval function $fn(::AbstractObject; t=t, dt=dt) end
 end
 function render!(::Window, ::AbstractObject; args...) end
 
-onevent!(window::Window, ::Val{:notsupported}, ::Event) = window
-onevent!(window::Window, val::Val, e::Event) = length(window.scene_stack) > 0 ? onevent!(window.scene_stack[end], val, e) : nothing
-onevent!(window::Window, val::Val{:quit}, e::Event) = quit!(window, e)
+onevent!(window::Window, ::Event{:notsupported}) = window
+onevent!(window::Window, e::Event) = length(window.scene_stack) > 0 ? onevent!(window.scene_stack[end], e) : nothing
+onevent!(window::Window, e::Event{:quit}) = quit!(window, e)
 
 for fn in [:before_update!, :update!, :after_update!]
     @eval $fn(window::Window; t::Float64, dt::Float64) = length(window.scene_stack) > 0 ? $fn(window.scene_stack[end], t=t, dt=dt) : nothing
@@ -132,9 +132,9 @@ end
 
 render!(window::Window; frame::Int, fps::Float64) = length(window.scene_stack) > 0 ? render!(window, window.scene_stack[end], frame=frame, fps=fps) : nothing
 
-function onevent!(scene::Scene, val::Val, e::Event)
+function onevent!(scene::Scene, e::Event)
     for layer in scene.layers
-        onevent!(layer, val, e)
+        onevent!(layer, e)
     end
     return scene
 end
@@ -157,9 +157,9 @@ function render!(window::Window, scene::Scene; frame::Int, fps::Float64)
     present!(window)
 end
 
-function onevent!(layer::Layer, val::Val, e::Event)
+function onevent!(layer::Layer, e::Event)
     for obj in layer.objects
-        onevent!(obj, val, e)
+        onevent!(obj, e)
     end
     return layer
 end
