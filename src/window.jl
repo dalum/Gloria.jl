@@ -1,6 +1,26 @@
 abstract type AbstractScene end
 abstract type AbstractLayer end
 
+struct Event{TYPE}
+    fields::Dict{Symbol, Any}
+end
+Event{TYPE}() where {TYPE} = Event{TYPE}(Dict{Symbol, Any}())
+Event{TYPE}(pairs::Pair...) where {TYPE}  = Event{TYPE}(Dict{Symbol, Any}(pairs...))
+
+Base.getproperty(e::Event, name::Symbol) = getfield(e, :fields)[name]
+Base.setproperty!(e::Event, name::Symbol, x) = setindex!(getfield(e, :fields), x, name)
+
+mutable struct Loop
+    target_speed::Float64
+    state::Dict{Symbol,Any}
+    task::Task
+
+    Loop(target_speed::Float64 = 50.0) = new(target_speed, Dict{Symbol,Any}())
+end
+
+Base.schedule(loop::Loop) = schedule(loop.task)
+Base.wait(loop::Loop) = wait(loop.task)
+
 """
 
 A Window.
@@ -10,7 +30,8 @@ mutable struct Window{T <: AbstractVector{<:AbstractScene}}
     window_ptr::Ptr{SDL.Window}
     render_ptr::Ptr{SDL.Renderer}
     scene_stack::T
-    tasks::Vector{Task}
+    loops::Vector{Loop}
+    event_queue::Vector{Event}
 
     function Window{T}(title::String, width::Int, height::Int, scene_stack::T = AbstractScene[]; fullscreen::Bool = false) where {T <: AbstractVector{<:AbstractScene}}
         window_ptr = SDL.CreateWindow(title, Int32(SDL.WINDOWPOS_CENTERED_MASK), Int32(SDL.WINDOWPOS_CENTERED_MASK), Int32(width), Int32(height), fullscreen ? SDL.WINDOW_FULLSCREEN : UInt32(0))
@@ -22,8 +43,9 @@ mutable struct Window{T <: AbstractVector{<:AbstractScene}}
         end
         SDL.SetRenderDrawBlendMode(render_ptr, SDL.BLENDMODE_BLEND)
         scene_stack = scene_stack
-        tasks = Task[]
-        self = new(window_ptr, render_ptr, scene_stack, tasks)
+        loops = Loop[]
+        event_queue = Event[]
+        self = new(window_ptr, render_ptr, scene_stack, loops, event_queue)
         finalizer(destroy!, self)
         return self
     end
@@ -46,6 +68,8 @@ function Base.getproperty(window::Window, name::Symbol)
     name == :height && return size(window)[2]
     getfield(window, name)
 end
+
+activescene(window::Window) = window.scene_stack[end]
 
 """
 
@@ -109,8 +133,8 @@ Block the current task until `window` has finished executing.
 
 """
 function Base.wait(window::Window)
-    for task in window.tasks
-        wait(task)
+    for loop in window.loops
+        wait(loop)
     end
     return nothing
 end

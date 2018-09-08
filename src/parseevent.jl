@@ -1,12 +1,3 @@
-struct Event{TYPE}
-    fields::Dict{Symbol, Any}
-end
-Event{TYPE}() where {TYPE} = Event{TYPE}(Dict{Symbol, Any}())
-Event{TYPE}(pairs::Pair...) where {TYPE}  = Event{TYPE}(Dict{Symbol, Any}(pairs...))
-
-Base.getproperty(e::Event, name::Symbol) = getfield(e, :fields)[name]
-Base.setproperty!(e::Event, name::Symbol, x) = setindex!(getfield(e, :fields), x, name)
-
 function bitcat(::Type{T}, arr)::T where T<:Number
     out = zero(T)
     for x in arr
