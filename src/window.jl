@@ -11,15 +11,22 @@ Base.getproperty(e::Event, name::Symbol) = getfield(e, :fields)[name]
 Base.setproperty!(e::Event, name::Symbol, x) = setindex!(getfield(e, :fields), x, name)
 
 mutable struct Loop
+    name::String
     target_speed::Float64
     state::Dict{Symbol,Any}
     task::Task
 
-    Loop(target_speed::Float64 = 50.0) = new(target_speed, Dict{Symbol,Any}())
+    Loop(name::String, target_speed::Float64 = 50.0) = new(name, target_speed, Dict{Symbol,Any}())
 end
 
 Base.schedule(loop::Loop) = schedule(loop.task)
 Base.wait(loop::Loop) = wait(loop.task)
+
+struct Timeout
+    t1::Float64
+    fn::Function
+end
+Base.isless(a::Timeout, b::Timeout) = isless(b.t1, a.t1)
 
 """
 
@@ -30,8 +37,9 @@ mutable struct Window{T <: AbstractVector{<:AbstractScene}}
     window_ptr::Ptr{SDL.Window}
     render_ptr::Ptr{SDL.Renderer}
     scene_stack::T
-    loops::Vector{Loop}
+    loops::Dict{String, Loop}
     event_queue::Vector{Event}
+    timer_queue::Vector{Timeout}
 
     function Window{T}(title::String, width::Int, height::Int, scene_stack::T = AbstractScene[]; fullscreen::Bool = false) where {T <: AbstractVector{<:AbstractScene}}
         window_ptr = SDL.CreateWindow(title, Int32(SDL.WINDOWPOS_CENTERED_MASK), Int32(SDL.WINDOWPOS_CENTERED_MASK), Int32(width), Int32(height), fullscreen ? SDL.WINDOW_FULLSCREEN : UInt32(0))
@@ -43,9 +51,10 @@ mutable struct Window{T <: AbstractVector{<:AbstractScene}}
         end
         SDL.SetRenderDrawBlendMode(render_ptr, SDL.BLENDMODE_BLEND)
         scene_stack = scene_stack
-        loops = Loop[]
+        loops = Dict{String,Loop}()
         event_queue = Event[]
-        self = new(window_ptr, render_ptr, scene_stack, loops, event_queue)
+        timer_queue = Timeout[]
+        self = new(window_ptr, render_ptr, scene_stack, loops, event_queue, timer_queue)
         finalizer(destroy!, self)
         return self
     end
@@ -133,7 +142,7 @@ Block the current task until `window` has finished executing.
 
 """
 function Base.wait(window::Window)
-    for loop in window.loops
+    for (name, loop) in window.loops
         wait(loop)
     end
     return nothing
@@ -184,6 +193,7 @@ end
 
 """
 kill!(layer::Layer, objs...) = (push!(layer.dead_objects, objs...); layer)
+killall!(layer::Layer) = (union!(layer.dead_objects, layer.objects); layer)
 
 """
 

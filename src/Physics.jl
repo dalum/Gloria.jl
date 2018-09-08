@@ -3,7 +3,7 @@ module Physics
 using Gloria: AbstractObject, AbstractShape, Layer
 
 import Gloria: after_update!, before_update!, render!, update!,
-    extrude, intersects, transform, simplest
+    extrude, intersects, points, simplest, transform
 
 abstract type PhysicalObject <: AbstractObject end
 
@@ -32,11 +32,19 @@ end
 
 @inline Base.setproperty!(obj::Physical, v::Symbol, x) = _setproperty!(obj, Val(v), x)
 @inline _setproperty!(obj::Physical, ::Val{V}, x) where V = Core.setfield!(obj.wrapped, V, x)
-for v in [:(:wrapped), :(:shape), :(:m), :(:I), :(:x), :(:y), :(:θ), :(:vx), :(:vy), :(:ω)]
+for v in [:(:wrapped), :(:shape)]
     @eval @inline _setproperty!(obj::Physical, ::Val{$v}, x) = Core.setfield!(obj, $v, x)
+end
+for v in [:(:m), :(:I), :(:x), :(:y), :(:θ), :(:vx), :(:vy), :(:ω)]
+    @eval @inline _setproperty!(obj::Physical, ::Val{$v}, x) = Core.setfield!(obj, $v, convert(Float64, x))
 end
 
 wrapped(obj::Physical) = obj.wrapped
+
+Base.size(obj::Physical) =
+    maximum(map(
+        point -> sqrt((point.x - obj.x)^2 + (point.y - obj.y)^2),
+        points(transform(obj.shape, obj.x, obj.y, obj.θ))))
 
 mass(obj::Physical) = obj.m
 position(obj::Physical) = (obj.x, obj.y)

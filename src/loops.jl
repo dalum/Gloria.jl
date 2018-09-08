@@ -15,7 +15,7 @@ function _loop(name::String, initialize::Expr, body::Expr, finalize::Expr = :(),
     global GLOBAL_LOOP_LOCK
     quote
         function (window::Window, target_speed::Float64 = $target_speed)
-            loop = Loop(target_speed)
+            loop = Loop($name, target_speed)
             _lock = 0x00
 
             task = @task try
@@ -33,7 +33,7 @@ function _loop(name::String, initialize::Expr, body::Expr, finalize::Expr = :(),
                 $finalize
             catch e
                 if !(e isa InvalidStateException)
-                    println("ERROR ($($name)): ", sprint(showerror, e, stacktrace(catch_backtrace())))
+                    println("ERROR ($(loop.name)): ", sprint(showerror, e, stacktrace(catch_backtrace())))
                     _lock === 0x01 && put!($GLOBAL_LOOP_LOCK[], _lock)
                 end
             end
@@ -46,27 +46,34 @@ end
 
 # Default loops
 
-const DEFAULT_EVENT_LOOP = @loop "event loop" (event_data = zeros(UInt8, 56)) begin
+const DEFAULT_EVENT_LOOP = @loop "event" (event_data = zeros(UInt8, 56)) begin
     while SDL.PollEvent(event_data) != 0
         event = parseevent(window, event_data)
         onevent!(window, event)
     end
 end
 
-const DEFAULT_UPDATE_LOOP = @loop "update loop" (state[:t0] = time(); state[:t] = 0.0; state[:dt] = 0.0) begin
+const DEFAULT_UPDATE_LOOP = @loop "update" (state[:t0] = time(); state[:t] = 0.0; state[:dt] = 0.0) begin
     state[:dt] = min(t1 - state[:t0], 5/target_speed)
     state[:t0] = t1
     state[:t] += state[:dt]
+
     for event in window.event_queue
         onevent!(window, event, state[:t], state[:dt])
     end
     empty!(window.event_queue)
+
+    sort!(window.timer_queue)
+    while length(window.timer_queue) > 0 && window.timer_queue[end].t1 <= state[:t]
+        pop!(window.timer_queue).fn()
+    end
+
     before_update!(window, state[:t], state[:dt])
     update!(window, state[:t], state[:dt])
     after_update!(window, state[:t], state[:dt])
 end
 
-const DEFAULT_RENDER_LOOP = @loop "render loop" (state[:frame] = 1; fps = 0.0; state[:t0] = time()) begin
+const DEFAULT_RENDER_LOOP = @loop "render" (state[:frame] = 1; fps = 0.0; state[:t0] = time()) begin
     if state[:frame] % target_speed == 0
         fps = target_speed / (time() - state[:t0])
         state[:t0] = time()
@@ -86,9 +93,10 @@ function run!(window::Window)
 end
 
 function run!(window::Window, loops::Function...)
-    loops = [loop(window) for loop in loops]
-    append!(window.loops, loops)
-    schedule.(loops)
+    for loop in map(loop->loop(window), loops)
+        window.loops[loop.name] = loop
+        schedule(loop)
+    end
     return window
 end
 
@@ -100,6 +108,8 @@ function reload!(window; target_event_speed::Float64 = 50.0, target_update_speed
     put!(GLOBAL_LOOP_LOCK[], 0x01)
     return run!(window, DEFAULT_EVENT_LOOP, DEFAULT_UPDATE_LOOP, DEFAULT_RENDER_LOOP)
 end
+
+settimer!(window::Window, t::Real, fn::Function) = push!(window.timer_queue, Timeout(convert(Float64, t), fn))
 
 struct InterruptQuit end
 

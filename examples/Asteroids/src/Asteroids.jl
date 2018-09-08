@@ -2,7 +2,7 @@ module Asteroids
 
 import Gloria: onevent!, render!, update!
 using Gloria: Gloria, AbstractObject, Audio, Circle, Event, Font, Layer, Line, Point, Polygon, Resources, Scene, Texture, Window,
-    add!, kill!, play!,
+    add!, kill!, killall!, play!, settimer!,
     intersects, isalive, iskey, ispressed, text
 
 using Gloria.Physics: Physical
@@ -23,56 +23,46 @@ Controls() = Controls(0, 3, false, 0.)
 
 struct Banner <: AbstractObject
     text::String
-    t1::Float64
 end
+Banner(text, t) = (self = Banner(text); settimer!(window, t, ()->kill!(banner_layer, self)); self)
 
 abstract type AsteroidsObject <: AbstractObject end
 
 mutable struct Player <: AsteroidsObject
-    model::Texture
     a::Float64
     α::Float64
 end
 
-mutable struct Shield <: AsteroidsObject
-    t1::Float64
-end
+mutable struct Shield <: AsteroidsObject end
 
-mutable struct LaserBeam <: AsteroidsObject
-    model::Texture
-    t1::Float64
-end
+mutable struct LaserBeam <: AsteroidsObject end
 
 mutable struct Rock <: AsteroidsObject
-    model::Texture
     scale::Float64
 end
 
 function Physical{Player}(a, α)
-    model = Texture(resources, abspath(@__DIR__, "..", "assets", "player.svg"), width=50, height=50)
     shape = Polygon(Point(-15., 0.), Point(-25., 15.), Point(25., 0.), Point(-25., -15.))
-    return Physical(Player(model, a, α), shape)
+    return Physical(Player(a, α), shape)
 end
 
-function Physical{Shield}(t1)
-    shape = Circle(0., 0., 50)
-    return Physical(Shield(t1), shape)
+function Physical{Shield}(t)
+    self = Physical(Shield(), Circle(0., 0., 50))
+    settimer!(window, t, ()->kill!(object_layer, self))
+    return self
 end
 
 function Physical{LaserBeam}(t, x, y, vx, vy, θ)
-    model = Texture(resources, abspath(@__DIR__, "..", "assets", "laser.svg"), width=50, height=4)
-    shape = Line(-25., 0., 25., 0.)
     shape = Point(0., 0.)
-    # shape = Gloria.extrude(shape, 200, 0, 0)
-    return Physical(LaserBeam(model, t + 1), shape; x=x, y=y, θ=θ, vx=vx, vy=vy)
+    self = Physical(LaserBeam(), shape; x=x, y=y, θ=θ, vx=vx, vy=vy)
+    settimer!(window, t, ()->kill!(object_layer, self))
+    return self
 end
 
 function Physical{Rock}(scale, x, y, vx, vy, θ, ω)
-    model = Texture(resources, abspath(@__DIR__, "..", "assets", "rock.svg"), width=100, height=100)
-    #shape = Circle(0., 0., 50scale)
     n = 12
     shape = Polygon([Point((50cos(2π*i/n)+10randn())*scale, (50sin(2π*i/n)+10randn())*scale) for i in 0:(n-1)]...)
-    return Physical(Rock(model, scale), shape, x=x, y=y, θ=θ, vx=vx, vy=vy, ω=ω)
+    return Physical(Rock(scale), shape, x=x, y=y, θ=θ, vx=vx, vy=vy, ω=ω)
 end
 
 ##################################################
@@ -90,7 +80,7 @@ end
 function onevent!(self::Physical{Player}, e::Event{:key_down}, t, dt)
     if controls.level > 0 && iskey(e, "space")
         play!(laser_sound, volume=10)
-        add!(object_layer, Physical{LaserBeam}(t, self.x, self.y, self.vx + cosd(self.θ)*500, self.vy + sind(self.θ)*500, self.θ))
+        add!(object_layer, Physical{LaserBeam}(t + 1, self.x, self.y, self.vx + cosd(self.θ)*500, self.vy + sind(self.θ)*500, self.θ))
     end
 end
 
@@ -107,23 +97,13 @@ end
 function update!(self::Controls, t, dt)
     if self.level > 0 && count(x->x isa Physical{Rock}, object_layer) == 0
         if !self.transition
-            self.t1 = t + 1
+            settimer!(window, t + 1, ()->(nextlevel!(t+1); self.transition = false))
             self.transition = true
         end
-
-        if t > self.t1
-            self.transition = false
-            nextlevel!(t)
-        end
     end
-    if self.lives < 0
+    if self.lives < 0 && !self.transition
         gameover!(t)
-    end
-end
-
-function update!(self::Banner, t, dt)
-    if t > self.t1
-        kill!(banner_layer, self)
+        self.transition = true
     end
 end
 
@@ -148,7 +128,7 @@ function update!(self::Physical{Player}, other::Physical{Rock}, t, dt)
             self.x, self.y = 0., 0.
             self.vx, self.vy = 0., 0.
             controls.lives -= 1
-            if controls.lives > 0
+            if controls.lives >= 0
                 add!(object_layer, Physical{Shield}(t + 2))
             end
         end
@@ -158,20 +138,11 @@ end
 function update!(self::Physical{Shield}, t, dt)
     self.x = player.x
     self.y = player.y
-    if t > self.t1
-        kill!(object_layer, self)
-    end
 end
 
 function update!(self::Physical{Shield}, other::Physical{Rock}, t, dt)
     if intersects(self, other, dt)
         destroyrock!(other, self)
-    end
-end
-
-function update!(self::Physical{LaserBeam}, t, dt)
-    if t >= self.wrapped.t1
-        kill!(object_layer, self)
     end
 end
 
@@ -182,11 +153,11 @@ function update!(self::Physical{LaserBeam}, other::Physical{Rock}, t, dt)
     end
 end
 
-function Gloria.after_update!(obj::Physical{<:AsteroidsObject}, t, dt)
-    obj.x > wrap_width / 2 && (obj.x -= wrap_width)
-    obj.x < -wrap_width / 2 && (obj.x += wrap_width)
-    obj.y > wrap_height / 2 && (obj.y -= wrap_height)
-    obj.y < -wrap_height / 2 && (obj.y += wrap_height)
+function Gloria.after_update!(self::Physical{<:AsteroidsObject}, t, dt)
+    self.x > width/2  + size(self) && (self.x -= width + 2size(self))
+    self.x < -width/2 - size(self) && (self.x += width + 2size(self))
+    self.y > height/2 + size(self) && (self.y -= height + 2size(self))
+    self.y < -height/2 - size(self) && (self.y += height + 2size(self))
 end
 
 ##################################################
@@ -198,9 +169,9 @@ function render!(layer::Layer, self::Banner, frame::Int, fps::Float64)
 end
 
 function render!(layer::Layer, self::Controls, frame::Int, fps::Float64)
-    if self.level > 0
+    if self.level > 0 && self.lives >= 0
         render!(layer, text(font_noto, "Lives: $(self.lives)", color=colorant"#FFFFFF"), 0., 0., 0.)
-    else
+    elseif self.level == 0
         render!(layer, text(font_noto, "Welcome to Asteroids!", color=colorant"#FFFFFF", halign=0.5, valign=0.5), width/2, height/2 - 50, 0.)
         if (frame % 50) <= 25
             render!(layer, text(font_noto, "Press space to start", color=colorant"#FFFFFF", halign=0.5, valign=0.5), width/2, height/2 + 50, 0.)
@@ -222,6 +193,17 @@ end
 # Helper functions
 ##################################################
 
+function startgame!(t)
+    killall!(object_layer)
+    controls.transition = false
+    controls.level = 0
+    controls.lives = 3
+    player.ω = 0
+    player.θ = -90
+
+    add!(object_layer, player, Physical{Shield}(t + 3))
+end
+
 function addrock!(scale, v)
     horv = rand(Bool)
     rock = Physical{Rock}(scale,
@@ -232,32 +214,51 @@ function addrock!(scale, v)
 end
 
 function destroyrock!(rock, other)
-    kill!(object_layer, rock)
-    if rock.scale > 0.25
-        for _ in 1:2
-            vx = 0.1other.vx/rock.scale + rock.vx
-            vy = 0.1other.vy/rock.scale + rock.vy
-            ω = rock.ω + 50*(rand() - 0.5)
-            add!(object_layer, Physical{Rock}(rock.scale/2, rock.x, rock.y, vx, vy, 360rand(), ω))
+    if isalive(object_layer, rock)
+        kill!(object_layer, rock)
+        if rock.scale > 0.25
+            for _ in 1:2
+                vx = 0.1other.vx/rock.scale + rock.vx
+                vy = 0.1other.vy/rock.scale + rock.vy
+                ω = rock.ω + 50*(rand() - 0.5)
+                add!(object_layer, Physical{Rock}(
+                    rock.scale/2,
+                    rock.x + 25rock.scale*randn(),
+                    rock.y + 25rock.scale*randn(),
+                    vx, vy, 360rand(), ω))
+            end
         end
     end
 end
 
 function nextlevel!(t)
+    # Reset the current level
+    for obj in filter(x->(x isa Physical{LaserBeam} || x isa Physical{Rock}), object_layer)
+        kill!(object_layer, obj)
+    end
+
+    # Initialize the next level
     controls.level += 1
     level = controls.level
     player.x, player.y = 0., 0.
     player.vx, player.vy = 0., 0.
-
-    for laserbeam in filter(x->x isa Physical{LaserBeam}, object_layer)
-        kill!(object_layer, laserbeam)
-    end
+    player.ω = 0
 
     add!(banner_layer, Banner("Level $level", t + 1))
     add!(object_layer, Physical{Shield}(t + 2))
-    if level % 3 != 0
+
+    # Populate with rocks!
+    if level % 5 == 0
+        for _ in 1:level
+            addrock!(0.7, 30 + 7level)
+        end
+    elseif level % 3 != 0
         for _ in 1:level
             addrock!(1., 30 + 5level)
+        end
+    elseif level % 15 == 0
+        for _ in 1:5*level
+            addrock!(0.10, 30 + 2level)
         end
     elseif level % 6 != 0
         for _ in 1:3*level
@@ -272,10 +273,8 @@ end
 
 function gameover!(t)
     kill!(object_layer, player)
-    kill!(controls_layer, controls)
-    controls.level = 0
-    controls.lives = 3
     add!(banner_layer, Banner("Game over", t + 3))
+    settimer!(window, t + 3, ()->startgame!(t + 3))
 end
 
 ##################################################
@@ -302,10 +301,9 @@ const font_noto = Font(resources, abspath(@__DIR__, "..", "assets", "NotoSans-Bl
 
 const player = Physical{Player}(100., 360.)
 
-add!(object_layer, player, Physical{Shield}(3))
-
 function main(; keepalive=true)
     Gloria.run!(window)
+    startgame!(0)
     if keepalive
         wait(window)
     end
