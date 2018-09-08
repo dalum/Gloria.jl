@@ -1,7 +1,7 @@
 module Asteroids
 
 import Gloria: onevent!, render!, update!
-using Gloria: Gloria, AbstractObject, Audio, Circle, Event, Font, FontRenderer, Layer, Line, Point, Polygon, Resources, Scene, Texture, Window,
+using Gloria: Gloria, AbstractObject, Audio, Circle, Event, Font, Layer, Line, Point, Polygon, Resources, Scene, Texture, Window,
     add!, kill!, play!,
     intersects, isalive, iskey, ispressed, text
 
@@ -225,8 +225,7 @@ const resources = Resources(window)
 const keyboard = Gloria.KeyboardState()
 
 const laser_sound = Audio(resources, abspath(@__DIR__, "..", "assets", "laser.wav"))
-const font_noto = FontRenderer(Font(resources, abspath(@__DIR__, "..", "assets", "NotoSans-Black.ttf")),
-                               resources)
+const font_noto = Font(resources, abspath(@__DIR__, "..", "assets", "NotoSans-Black.ttf"))
 
 const player = Physical{Player}(100., 360.)
 

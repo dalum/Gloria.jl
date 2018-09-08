@@ -46,7 +46,7 @@ const DEFAULT_EVENT_LOOP = @loop "event loop" (event_data = zeros(UInt8, 56)) wh
 end
 
 const DEFAULT_UPDATE_LOOP = @loop "update loop" (t0 = time(); t = 0.0; dt = 0.0) begin
-    dt = min(t1 - t0, 2/target_speed)
+    dt = min(t1 - t0, 5/target_speed)
     t0 = t1
     t += dt
     before_update!(window, t=t, dt=dt)
@@ -69,7 +69,7 @@ end
 Execute `window`.
 
 """
-function run!(window::Window; target_event_speed::Float64 = 100.0, target_update_speed::Float64 = 60.0, target_render_speed::Float64 = 60.0)
+function run!(window::Window; target_event_speed::Float64 = 50.0, target_update_speed::Float64 = 50.0, target_render_speed::Float64 = 50.0)
     return run!(window,
                 target_event_speed => DEFAULT_EVENT_LOOP,
                 target_update_speed => DEFAULT_UPDATE_LOOP,
@@ -83,7 +83,7 @@ function run!(window::Window, loops::Pair{Float64,<:Function}...)
     return window
 end
 
-function reload!(window; target_event_speed::Float64 = 100.0, target_update_speed::Float64 = 60.0, target_render_speed::Float64 = 60.0)
+function reload!(window; target_event_speed::Float64 = 50.0, target_update_speed::Float64 = 50.0, target_render_speed::Float64 = 50.0)
     close(GLOBAL_LOOP_LOCK[])
     wait(window)
     empty!(window.tasks)

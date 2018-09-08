@@ -11,8 +11,8 @@ mutable struct Texture{T} <: AbstractGraphics
     center_y::Int
 end
 
-function Texture(resources::Resources, sdl_surface::Ptr{SDL.Surface}; halign = 0.5, valign = 0.5)
-    texture_ptr = SDL.CreateTextureFromSurface(resources.render_ptr, sdl_surface)
+function Texture(render_ptr::Ptr{SDL.Renderer}, sdl_surface::Ptr{SDL.Surface}; halign = 0.5, valign = 0.5)
+    texture_ptr = SDL.CreateTextureFromSurface(render_ptr, sdl_surface)
     SDL.FreeSurface(sdl_surface)
     width, height = Int[0], Int[0]
     SDL.QueryTexture(texture_ptr, C_NULL, C_NULL, width, height)
