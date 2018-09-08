@@ -1,9 +1,9 @@
 module Asteroids
 
 import Gloria: onevent!, render!, update!
-using Gloria: Gloria, AbstractObject, Audio, Circle, Event, Layer, Line, Point, Polygon, Scene, Texture, Window,
+using Gloria: Gloria, AbstractObject, Audio, Circle, Event, Font, FontRenderer, Layer, Line, Point, Polygon, Resources, Scene, Texture, Window,
     add!, kill!, play!,
-    intersects, isalive, iskey, ispressed
+    intersects, isalive, iskey, ispressed, text
 
 import Gloria.Physics: interact!
 using Gloria.Physics: Physical
@@ -37,13 +37,13 @@ mutable struct Rock <: AsteroidsObject
 end
 
 function Physical{Player}(a, α)
-    model = Texture(window, abspath(@__DIR__, "..", "assets", "player.svg"), width=50, height=50)
+    model = Texture(resources, abspath(@__DIR__, "..", "assets", "player.svg"), width=50, height=50)
     shape = Polygon(Point(-15., 0.), Point(-25., 15.), Point(25., 0.), Point(-25., -15.))
     return Physical(Player(model, a, α), shape)
 end
 
 function Physical{LaserBeam}(x, y, vx, vy, θ)
-    model = Texture(window, abspath(@__DIR__, "..", "assets", "laser.svg"), width=50, height=4)
+    model = Texture(resources, abspath(@__DIR__, "..", "assets", "laser.svg"), width=50, height=4)
     shape = Line(-25., 0., 25., 0.)
     shape = Point(0., 0.)
     # shape = Gloria.extrude(shape, 200, 0, 0)
@@ -51,7 +51,7 @@ function Physical{LaserBeam}(x, y, vx, vy, θ)
 end
 
 function Physical{Rock}(scale, x, y, vx, vy, θ, ω)
-    model = Texture(window, abspath(@__DIR__, "..", "assets", "rock.svg"), width=100, height=100)
+    model = Texture(resources, abspath(@__DIR__, "..", "assets", "rock.svg"), width=100, height=100)
     #shape = Circle(0., 0., 50scale)
     n = 12
     shape = Polygon([Point((50cos(2π*i/n)+10randn())*scale, (50sin(2π*i/n)+10randn())*scale) for i in 0:(n-1)]...)
@@ -152,24 +152,32 @@ end
 # Render
 ##################################################
 
-# function render!(layer::Layer, self::Physical{<:AsteroidsObject}; frame::Int, fps::Float64)
-#     render!(layer, self.model, self.x, self.y, self.θ)
-# end
-
-# function render!(layer::Layer, self::Physical{Rock}; frame::Int, fps::Float64)
-#     render!(layer, self.model, self.x, self.y, self.θ, scale=self.scale)
-# end
-
-function render!(layer::Layer, self::Physical{Player}; frame::Int, fps::Float64)
-    render!(layer, self.shape, self.x, self.y, self.θ, color=colorant"#C0C0C0")
+function render!(layer::Layer, self::Controls; frame::Int, fps::Float64)
+    render!(layer, text(font_noto, "Current level: $(self.level)", color=colorant"#FFFFFF"), 0., 0., 0.)
 end
 
-function render!(layer::Layer, self::Physical{LaserBeam}; frame::Int, fps::Float64)
-    render!(layer, self.shape, self.x, self.y, self.θ, color=colorant"#C0C0C0")
-end
+const iswireframe = true
 
-function render!(layer::Layer, self::Physical{Rock}; frame::Int, fps::Float64)
-    render!(layer, self.shape, self.x, self.y, self.θ, color=colorant"#A0A0A0")
+@static if iswireframe
+    function render!(layer::Layer, self::Physical{Player}; frame::Int, fps::Float64)
+        render!(layer, self.shape, self.x, self.y, self.θ, color=colorant"#C0C0C0")
+    end
+
+    function render!(layer::Layer, self::Physical{LaserBeam}; frame::Int, fps::Float64)
+        render!(layer, self.shape, self.x, self.y, self.θ, color=colorant"#C0C0C0")
+    end
+
+    function render!(layer::Layer, self::Physical{Rock}; frame::Int, fps::Float64)
+        render!(layer, self.shape, self.x, self.y, self.θ, color=colorant"#A0A0A0")
+    end
+else
+    function render!(layer::Layer, self::Physical{<:AsteroidsObject}; frame::Int, fps::Float64)
+        render!(layer, self.model, self.x, self.y, self.θ)
+    end
+
+    function render!(layer::Layer, self::Physical{Rock}; frame::Int, fps::Float64)
+        render!(layer, self.model, self.x, self.y, self.θ, scale=self.scale)
+    end
 end
 
 ###
@@ -206,15 +214,19 @@ end
 # const width, height = 1920, 1080
 const width, height = 800, 600
 const wrap_width, wrap_height = width + 100, height + 100
-const controls_layer = Layer([Controls(0)], show=false)
 
+const controls_layer = Layer([Controls(0)])
 const object_layer = Layer(Physical[], width/2, height/2)
 
-const scene = Scene(controls_layer, object_layer, color=colorant"#202020")
+const scene = Scene(object_layer, controls_layer, color=colorant"#202020")
 const window = Window("Asteroids", width, height, scene, fullscreen=false)
+
+const resources = Resources(window)
 const keyboard = Gloria.KeyboardState()
 
-const laser_sound = Audio(window, abspath(@__DIR__, "..", "assets", "laser.wav"))
+const laser_sound = Audio(resources, abspath(@__DIR__, "..", "assets", "laser.wav"))
+const font_noto = FontRenderer(Font(resources, abspath(@__DIR__, "..", "assets", "NotoSans-Black.ttf")),
+                               resources)
 
 const player = Physical{Player}(100., 360.)
 

@@ -10,7 +10,6 @@ mutable struct Window{T <: AbstractVector{<:AbstractScene}}
     window_ptr::Ptr{SDL.Window}
     render_ptr::Ptr{SDL.Renderer}
     scene_stack::T
-    resources::Dict{String, AbstractResource}
     tasks::Vector{Task}
 
     function Window{T}(title::String, width::Int, height::Int, scene_stack::T = AbstractScene[]; fullscreen::Bool = false) where {T <: AbstractVector{<:AbstractScene}}
@@ -23,9 +22,8 @@ mutable struct Window{T <: AbstractVector{<:AbstractScene}}
         end
         SDL.SetRenderDrawBlendMode(render_ptr, SDL.BLENDMODE_BLEND)
         scene_stack = scene_stack
-        resources = Dict{String,AbstractResource}()
         tasks = Task[]
-        self = new(window_ptr, render_ptr, scene_stack, resources, tasks)
+        self = new(window_ptr, render_ptr, scene_stack, tasks)
         finalizer(destroy!, self)
         return self
     end
@@ -47,17 +45,6 @@ function Base.getproperty(window::Window, name::Symbol)
     name == :width && return size(window)[1]
     name == :height && return size(window)[2]
     getfield(window, name)
-end
-
-"""
-    delete!(window::Window, filename::String)
-
-Remove the reference to the resource located at `filename` from `window`.
-
-"""
-function Base.delete!(window::Window, filename::String)
-    delete!(window.resources, filename)
-    return window
 end
 
 """

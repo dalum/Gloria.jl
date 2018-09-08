@@ -1,23 +1,23 @@
 mutable struct Audio <: AbstractResource
     ptr::Ptr{SDL.Mix_Chunk}
-    fname::String
+    filename::String
     channels::Set{Int32}
 
-    function Audio(ptr::Ptr{SDL.Mix_Chunk}, fname::String)
-        self = new(ptr, fname, Set{Int32}())
+    function Audio(ptr::Ptr{SDL.Mix_Chunk}, filename::String)
+        self = new(ptr, filename, Set{Int32}())
         finalizer(destroy!, self)
         return self
     end
 end
 
-function Audio(window::Window, fname::String)
-    if fname in keys(window.resources)
-        @debug("resource already loaded: '$fname'")
-        return window.resources[fname]::Audio
+function Audio(resources::Resources, filename::String)
+    if filename in keys(resources)
+        @debug("resource already loaded: '$filename'")
+        return resources[filename]::Audio
     end
 
-    self = Audio(load(query(fname)), fname)
-    window.resources[fname] = self
+    self = Audio(load(query(filename)), filename)
+    resources[filename] = self
     return self
 end
 

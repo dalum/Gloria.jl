@@ -1,32 +1,41 @@
 using Cairo
 using Rsvg
 
-abstract type AbstractTexture <: AbstractResource end
+abstract type AbstractGraphics <: AbstractResource end
 
-mutable struct Texture{T} <: AbstractTexture
+mutable struct Texture{T} <: AbstractGraphics
     ptr::Ptr{T}
-    filename::String
     width::Int
     height::Int
     center_x::Int
     center_y::Int
 end
 
-function Texture(window::Window, filename::String; width::Int = -1, height::Int = -1, scale::Real = 1.0)
-    if filename in keys(window.resources)
-        @debug("resource already loaded: '$filename'")
-        return window.resources[filename]::Texture
-    end
-
-    ptr, width, height = load(query(filename), window, width, height, scale)
-
-    self = Texture(ptr, filename, width, height, round(Int, width/2), round(Int, height/2))
+function Texture(resources::Resources, sdl_surface::Ptr{SDL.Surface}; halign = 0.5, valign = 0.5)
+    texture_ptr = SDL.CreateTextureFromSurface(resources.render_ptr, sdl_surface)
+    SDL.FreeSurface(sdl_surface)
+    width, height = Int[0], Int[0]
+    SDL.QueryTexture(texture_ptr, C_NULL, C_NULL, width, height)
+    self = Texture(texture_ptr, width[], height[], round(Int, width[]*halign), round(Int, height[]*valign))
     finalizer(destroy!, self)
-    window.resources[filename] = self
     return self
 end
 
-function load(f::File{format"SVG"}, window::Window, width::Int, height::Int, scale::Real)
+function Texture(resources::Resources, filename::String; width::Int = -1, height::Int = -1, scale::Real = 1.0)
+    if filename in keys(resources)
+        @debug("resource already loaded: '$filename'")
+        return resources[filename]::Texture
+    end
+
+    ptr, width, height = load(query(filename), resources, width, height, scale)
+
+    self = Texture(ptr, width, height, round(Int, width/2), round(Int, height/2))
+    finalizer(destroy!, self)
+    resources[filename] = self
+    return self
+end
+
+function load(f::File{format"SVG"}, resources::Resources, width::Int, height::Int, scale::Real)
     rsvg_handle = Rsvg.handle_new_from_file(f.filename)
     Int(rsvg_handle.ptr) == 0 && error("'$(f.filename)' is not a valid SVG file")
 
@@ -45,14 +54,14 @@ function load(f::File{format"SVG"}, window::Window, width::Int, height::Int, sca
     sdl_surface = SDL.CreateRGBSurfaceFrom(pointer(cairo_surface.data),
                                            width, height, 32, Int32(width*4),
                                            0x00_ff_00_00, 0x00_00_ff_00, 0x00_00_00_ff, 0xff_00_00_00)
-    texture_ptr = SDL.CreateTextureFromSurface(window.render_ptr, sdl_surface)
+    texture_ptr = SDL.CreateTextureFromSurface(resources.render_ptr, sdl_surface)
+    SDL.FreeSurface(sdl_surface)
+    Cairo.destroy(cairo_surface)
 
     if texture_ptr == C_NULL
         error("Failed to load texture from: '$(f.filename)'")
     end
 
-    SDL.FreeSurface(sdl_surface)
-    Cairo.destroy(cairo_surface)
     return texture_ptr, width, height
 end
 

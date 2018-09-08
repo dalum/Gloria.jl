@@ -4,9 +4,8 @@ Set the color for drawing operations on `window`.
 
 """
 setcolor!(window::Window, r::Int, g::Int, b::Int, a::Int) = SDL.SetRenderDrawColor(window.render_ptr, r, g, b, a)
-setcolor!(window::Window, color::Colors.Color) = setcolor!(window, round(Int, color.r * 255), round(Int, color.g * 255), round(Int, color.b * 255), round(Int, color.alpha * 255))
-setcolor!(window::Window, color::Colors.Color3) = setcolor!(window, color, 255)
-setcolor!(window::Window, color::Colors.Color3, a::Int) = setcolor!(window, round(Int, color.r * 255), round(Int, color.g * 255), round(Int, color.b * 255), a)
+setcolor!(window::Window, color::Colors.Color) = setcolor!(window, rgba_fromcolor(color)...)
+setcolor!(window::Window, color::Colors.Color, a::Int) = setcolor!(window, rgba_fromcolor(color, a)...)
 
 """
     clear!(window)
@@ -26,41 +25,43 @@ to `present!`.
 present!(window::Window) = SDL.RenderPresent(window.render_ptr)
 
 ##################################################
-# Textures
+# Generic rendering
 ##################################################
 
-"""
-    render!(window::Window, texture::Texture, x, y, args...)
-
-Render `texture` onto `window`'s surface with the texture centered at
-`x` and `y`.
-
-"""
-function render!(window::Window, texture::Texture{SDL.Texture}, x::Int, y::Int, θ::Float64 = 0.0, scale_x::Float64 = 1.0, scale_y::Float64 = 1.0, offset_x::Int = 0, offset_y::Int = 0, flip::Symbol = :none)
-    center_x, center_y = (texture.center_x + offset_x)*scale_x, (texture.center_y + offset_y)*scale_y
-    rect = SDL.Rect(round(Int, x - center_x), round(Int, y - center_y),
-                    round(Int, texture.width*scale_x), round(Int, texture.height*scale_y))
-    point = SDL.Point(round(Int, center_x), round(Int, center_y))
-    flip = UInt32(flip === :horizontal ? SDL.FLIP_HORIZONTAL :
-                  flip === :vertical ? SDL.FLIP_VERTICAL :
-                  SDL.FLIP_NONE)
-    GC.@preserve rect point SDL.RenderCopyEx(window.render_ptr, texture.ptr,
-                                             C_NULL, pointer_from_objref(rect),
-                                             θ, pointer_from_objref(point),
-                                             flip)
-    return window
+function render!(layer::Layer, source::Union{AbstractGraphics,AbstractShape}, x, y, θ = 0.0; scale = 1.0, offset_x = 0, offset_y = 0, flip::Symbol = :none, color = colorant"black")
+    push!(layer.render_tasks, RenderTask(source, x, y, θ, scale, offset_x, offset_y, flip, color))
+    return layer
 end
 
-function render!(window::Window, layer::AbstractLayer, r::RenderTask{<:Texture})
+function render!(layer::Layer, text::Text, x, y, θ = 0.0; scale = 1.0, offset_x = 0, offset_y = 0, flip::Symbol = :none, color = colorant"black")
+    push!(layer.render_tasks, RenderTask(text.graphics, x, y, θ, scale, offset_x, offset_y, flip, color))
+    return layer
+end
+
+##################################################
+# AbstractGraphics
+##################################################
+
+function render!(window::Window, layer::AbstractLayer, r::RenderTask{<:AbstractGraphics})
     x = r.x*layer.scale + layer.x
     y = r.y*layer.scale + layer.y
     scale = layer.scale*r.scale
     render!(window, r.source, round(Int, x), round(Int, y), r.θ, scale, scale, r.offset_x, r.offset_y, r.flip)
 end
 
-function render!(layer::Layer, texture::Texture, x, y, θ = 0.0; scale = 1.0, offset_x = 0, offset_y = 0, flip::Symbol = :none, color = colorant"black")
-    push!(layer.render_tasks, RenderTask(texture, x, y, θ, scale, offset_x, offset_y, flip, color))
-    return layer
+function render!(window::Window, source::Texture{SDL.Texture}, x::Int, y::Int, θ::Float64 = 0.0, scale_x::Float64 = 1.0, scale_y::Float64 = 1.0, offset_x::Int = 0, offset_y::Int = 0, flip::Symbol = :none)
+    center_x, center_y = (source.center_x + offset_x)*scale_x, (source.center_y + offset_y)*scale_y
+    rect = SDL.Rect(round(Int, x - center_x), round(Int, y - center_y),
+                    round(Int, source.width*scale_x), round(Int, source.height*scale_y))
+    point = SDL.Point(round(Int, center_x), round(Int, center_y))
+    flip = UInt32(flip === :horizontal ? SDL.FLIP_HORIZONTAL :
+                  flip === :vertical ? SDL.FLIP_VERTICAL :
+                  SDL.FLIP_NONE)
+    GC.@preserve rect point SDL.RenderCopyEx(window.render_ptr, source.ptr,
+                                             C_NULL, pointer_from_objref(rect),
+                                             θ, pointer_from_objref(point),
+                                             flip)
+    return window
 end
 
 ##################################################
@@ -139,11 +140,6 @@ function render!(window::Window, cs::CompositeShape, x, y, θ = 0.0; scale = 1.0
         render!(window, shape, x, y, θ, scale=scale, color=color)
     end
     return window
-end
-
-function render!(layer::Layer, shape::AbstractShape, x, y, θ = 0.0; scale = 1.0, offset_x = 0, offset_y = 0, flip::Symbol = :none, color = colorant"white")
-    push!(layer.render_tasks, RenderTask(shape, x, y, θ, scale, offset_x, offset_y, flip, color))
-    return layer
 end
 
 function render!(window::Window, layer::AbstractLayer, r::RenderTask{<:AbstractShape})

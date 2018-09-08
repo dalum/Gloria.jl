@@ -121,6 +121,7 @@ for fn in [:before_update!, :update!, :after_update!]
     @eval function $fn(::AbstractObject; t=t, dt=dt) end
 end
 function render!(::Window, ::AbstractObject; args...) end
+function render!(::Layer, ::AbstractObject; args...) end
 
 onevent!(window::Window, ::Event{:notsupported}) = window
 onevent!(window::Window, e::Event) = length(window.scene_stack) > 0 ? onevent!(window.scene_stack[end], e) : nothing
