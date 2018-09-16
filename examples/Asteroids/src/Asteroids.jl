@@ -1,11 +1,12 @@
 module Asteroids
 
 import Gloria: onevent!, render!, update!
-using Gloria: Gloria, AbstractObject, Audio, Circle, Event, Font, Layer, Line, Point, Polygon, Resources, Scene, Texture, Window,
+using Gloria: Gloria, AbstractObject, Audio, Event, Font, Layer, Resources, Scene, Texture, Window,
     add!, kill!, killall!, play!, settimer!,
-    intersects, isalive, iskey, ispressed, text
+    isalive, iskey, ispressed, text
 
-using Gloria.Physics: Physical
+using Gloria.Shapes: Line, Point, circle, polygon
+using Gloria.Physics: Physical, timeintersects
 
 using Colors: @colorant_str
 
@@ -33,21 +34,21 @@ mutable struct Player <: AsteroidsObject
     α::Float64
 end
 
-mutable struct Shield <: AsteroidsObject end
+struct Shield <: AsteroidsObject end
 
-mutable struct LaserBeam <: AsteroidsObject end
+struct LaserBeam <: AsteroidsObject end
 
-mutable struct Rock <: AsteroidsObject
+struct Rock <: AsteroidsObject
     scale::Float64
 end
 
 function Physical{Player}(a, α)
-    shape = Polygon(Point(-15., 0.), Point(-25., 15.), Point(25., 0.), Point(-25., -15.))
+    shape = polygon((Point(-15., 0.), Point(-25., 15.), Point(25., 0.), Point(-25., -15.)))
     return Physical(Player(a, α), shape)
 end
 
 function Physical{Shield}(t)
-    self = Physical(Shield(), Circle(0., 0., 50))
+    self = Physical(Shield(), circle(Point(0., 0.), 50))
     settimer!(window, t, ()->kill!(object_layer, self))
     return self
 end
@@ -58,10 +59,11 @@ function Physical{LaserBeam}(t, x, y, vx, vy, θ)
     settimer!(window, t, ()->kill!(object_layer, self))
     return self
 end
+Base.size(::Physical{LaserBeam}) = 25
 
 function Physical{Rock}(scale, x, y, vx, vy, θ, ω)
     n = 12
-    shape = Polygon([Point((50cos(2π*i/n)+10randn())*scale, (50sin(2π*i/n)+10randn())*scale) for i in 0:(n-1)]...)
+    shape = polygon([Point((50cos(2π*i/n))*scale, (50sin(2π*i/n)+10randn())*scale) for i in 0:(n-1)])
     return Physical(Rock(scale), shape, x=x, y=y, θ=θ, vx=vx, vy=vy, ω=ω)
 end
 
@@ -121,7 +123,7 @@ function update!(self::Physical{Player}, t, dt)
 end
 
 function update!(self::Physical{Player}, other::Physical{Rock}, t, dt)
-    if isalive(object_layer, other) && intersects(self, other, dt)
+    if isalive(object_layer, other) && timeintersects(self, other)
         destroyrock!(other, self)
 
         if !any(x->x isa Physical{Shield}, object_layer)
@@ -141,13 +143,13 @@ function update!(self::Physical{Shield}, t, dt)
 end
 
 function update!(self::Physical{Shield}, other::Physical{Rock}, t, dt)
-    if intersects(self, other, dt)
+    if timeintersects(self, other)
         destroyrock!(other, self)
     end
 end
 
 function update!(self::Physical{LaserBeam}, other::Physical{Rock}, t, dt)
-    if isalive(object_layer, self) && intersects(self, other, dt)
+    if isalive(object_layer, self) && timeintersects(self, other)
         kill!(object_layer, self)
         destroyrock!(other, self)
     end

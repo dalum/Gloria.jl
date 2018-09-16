@@ -137,6 +137,7 @@ function onevent!(::AbstractObject, ::Event, t, dt) end
 for fn in [:before_update!, :update!, :after_update!]
     @eval function $fn(::AbstractObject, t, dt) end
 end
+function update!(::AbstractObject, ::AbstractObject, t, dt) end
 function render!(::Window, ::AbstractObject, frame, fps) end
 function render!(::Layer, ::AbstractObject, frame, fps) end
 
@@ -214,8 +215,12 @@ function before_update!(layer::Layer, t::Float64, dt::Float64)
 end
 
 function update!(layer::Layer, t::Float64, dt::Float64)
-    for obj in layer.objects
-        update!(obj, t, dt)
+    for obj1 in layer.objects, obj2 in layer.objects
+        if obj1 === obj2
+            update!(obj1, t, dt)
+        else
+            update!(obj1, obj2, t, dt)
+        end
     end
     return layer
 end

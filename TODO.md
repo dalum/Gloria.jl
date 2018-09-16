@@ -1,11 +1,15 @@
 ### Animation
 
+* Rigging
+* Sprite animation
+
 ### Physics
 
-* Collision detection
+* ~~Intersect detection~~
 * Elastic scattering
 * Inelastic scattering
+* Joints/pin
 
 ### UI
 
-* Text support
+* ~~Text support~~

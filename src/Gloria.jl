@@ -23,12 +23,15 @@ include("window.jl")
 include("resources.jl")
 include("texture.jl")
 include("text.jl")
-include("shape.jl")
+include("Shapes.jl")
 include("parseevent.jl")
 include("loops.jl")
 include("mouse.jl")
 include("keyboard.jl")
 include("audio.jl")
+
+using .Shapes: AbstractShape, Line, NonPrimitiveShape, Point,
+    rotate, transform, translate
 
 include("graphics.jl")
 
