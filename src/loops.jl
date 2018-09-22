@@ -215,12 +215,8 @@ function before_update!(layer::Layer, t::Float64, dt::Float64)
 end
 
 function update!(layer::Layer, t::Float64, dt::Float64)
-    for obj1 in layer.objects, obj2 in layer.objects
-        if obj1 === obj2
-            update!(obj1, t, dt)
-        else
-            update!(obj1, obj2, t, dt)
-        end
+    for obj in layer.objects
+        update!(obj, t, dt)
     end
     return layer
 end

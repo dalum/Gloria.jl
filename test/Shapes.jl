@@ -5,17 +5,28 @@ using Test, Random
 using Gloria.Shapes
 
 @testset "Intersection" begin
+    p0 = Point(0., 0.)
     p1 = Point(1.05, 0.)
     p2 = Point(1.5, 0.25)
     l1 = Line(Point(-1., 0.), Point(1., 0.))
     l2 = Line(Point(0.5, 0.), Point(1.5, 0.))
     l3 = Line(Point(0.85, -0.5), Point(1.85, 0.5))
     l4 = Line(Point(-0.5, 1.), Point(-0.5, 2.))
+    l5 = Line(Point(-0.25, -0.75), Point(0.75, 0.25))
     pol1 = polygon([Point(-1., -0.5), Point(0., 0.5), Point(1., -0.5), Point(0., -1.5)])
+
+    @test p0 == zero(p1) == zero(typeof(p2))
+    @test iszero(p0)
 
     @test p1[1] === p1
     @test p1[1:1] === (p1,)
     @test_throws BoundsError p1[2]
+
+    @test trace(p0, l1) == [0.5]
+    @test trace(p0, l2) == Float64[]
+    @test trace(p0, l3) == Float64[]
+    @test trace(p0, l4) == Float64[]
+    @test trace(p0, l5) == Float64[]
 
     @test trace(p1, l1) == Float64[]
     @test trace(p1, l2) == [0.55]

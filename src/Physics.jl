@@ -5,7 +5,7 @@ using Gloria: AbstractObject, Layer
 using ..Shapes: AbstractShape, Line, NonPrimitiveShape, Point, Windowing,
     extrude, rotate, trace, transform, translate, vertices
 
-export Gravity, Physical, PhysicalObject,
+export Physical, PhysicalObject,
     collide!
 
 abstract type PhysicalObject <: AbstractObject end
@@ -96,14 +96,6 @@ setangularmass!(obj::Physical, I) = (obj.I = I; obj)
 setangle!(obj::Physical, θ) = (obj.θ = θ; obj)
 setangularvelocity!(obj::Physical, ω) = (obj.ω = ω; obj)
 
-struct Gravity <: PhysicalObject
-    x::Float64
-    y::Float64
-end
-Gravity(g; θ) = Gravity(g*cosd(θ), g*sind(θ))
-
-isstatic(::Gravity) = true
-
 @inline function translate!(obj::PhysicalObject, x′, y′)
     x, y = position(obj)
     setposition!(obj, x + x′, y + y′)
@@ -136,13 +128,6 @@ function before_update!(obj::PhysicalObject, t::Float64, dt::Float64)
     end
 end
 
-function update!(obj::PhysicalObject, g::Gravity, t::Float64, dt::Float64)
-    if !isstatic(obj)
-        accelerate!(obj, dt*g.x, dt*g.y)
-    end
-    return obj
-end
-
 ##################################################
 # Time translation
 ##################################################
@@ -154,15 +139,16 @@ end
     rotate!(obj, dt*ω)
 end
 
-function timeinterpolate(obj::PhysicalObject, dt::Float64)
+function timeinterpolate(obj::Physical, dt::Float64)
     dt > 0 && error("Cannot interpolate forward in time (yet).")
     state = currentstate(obj)
+    t = state.t
     local prevstate
     for prevstate in obj.state_history[end-1:-1:1]
-        prevstate.t - state.t < dt && break
+        prevstate.t - t < dt && break
         state = prevstate
     end
-    
+    prevstate.t - state.t
 end
 
 ##################################################
@@ -173,36 +159,44 @@ intersects(obj1::PhysicalObject, obj2::PhysicalObject) = intersects(
     transform(obj1.shape, rotate(obj1.θ), translate(obj1.x, obj1.y)),
     transform(obj2.shape, rotate(obj2.θ), translate(obj2.x, obj2.y)))
 
-function timetrace(obj1::PhysicalObject, obj2::PhysicalObject)
-    state1, state2 = currentstate(obj1), currentstate(obj2)
-    prevstate1, prevstate2 = obj1.state_history[end-1], obj2.state_history[end-1]
+function timecapture(shape1::AbstractShape, shape2::AbstractShape, (state1, prevstate1)::Tuple{PhysicalState, PhysicalState}, (state2, prevstate2)::Tuple{PhysicalState, PhysicalState})
     Δx = prevstate2.x - prevstate1.x
     Δy = prevstate2.y - prevstate1.y
+
     δx1 = state1.x - prevstate1.x
     δy1 = state1.y - prevstate1.y
     δθ1 = state1.θ - prevstate1.θ
-
     δx2 = state2.x - prevstate2.x
     δy2 = state2.y - prevstate2.y
     δθ2 = state2.θ - prevstate2.θ
 
-    shape = rotate(obj1.shape, prevstate1.θ)
-    lines = vertices(obj2.shape) |> rotate(prevstate2.θ) |>
+    shape = rotate(shape1, prevstate1.θ)
+    lines = vertices(shape2) |> rotate(prevstate2.θ) |>
         extrude(rotate(δθ2), translate(δx2, δy2), translate(-δx1, δy1), translate(Δx, Δy), rotate(-δθ1), translate(-Δx, -Δy)) |>
         translate(Δx, Δy)
-
-    return trace(shape, lines)
+    return shape, lines
 end
 
-function timetrace(obj1::PhysicalObject, obj2::PhysicalObject, dt::Float64)
-    
+function timecapture(obj1::PhysicalObject, obj2::PhysicalObject)
+    state1, state2 = currentstate(obj1), currentstate(obj2)
+    prevstate1, prevstate2 = obj1.state_history[end-1], obj2.state_history[end-1]
+    return timecapture(obj1.shape, obj2.shape, (state1, prevstate1), (state2, prevstate2))
+end
+
+
+function timetrace(shape1::AbstractShape, shape2::AbstractShape, (state1, prevstate1)::Tuple{PhysicalState, PhysicalState}, (state2, prevstate2)::Tuple{PhysicalState, PhysicalState})
+    dt = state1.t - prevstate1.t
+    return dt .* (trace(timecapture(shape1, shape2, (state1, prevstate1), (state2, prevstate2))...) .- 1.)
+end
+
+function timetrace(obj1::PhysicalObject, obj2::PhysicalObject)
+    state1, state2 = currentstate(obj1), currentstate(obj2)
+    prevstate1, prevstate2 = obj1.state_history[end-1], obj2.state_history[end-1]
+    return timetrace(obj1.shape, obj2.shape, (state1, prevstate1), (state2, prevstate2))
 end
 
 timeintersects(obj1::PhysicalObject, obj2::PhysicalObject) =
     length(timetrace(obj1, obj2)) > 0 || length(timetrace(obj2, obj1)) > 0
-
-timeintersects(obj1::Physical{<:Any,<:Point}, obj2::PhysicalObject) =
-    length(timetrace(obj2, obj1)) > 0
 
 function centerofmass(objs)
     mx = my = M = 0.0
@@ -216,48 +210,14 @@ function centerofmass(objs)
     return mx / M, my / M
 end
 
-# """
-#     (obj1, obj2, dt)
+"""
+    collisiontime(shape1, shape2)
 
-# Return a 
+Return the time `dt` into past to find the earliest point where
+`shape1` intersects `shape2`.
 
-# """
-# function (obj1::Physical{<:AbstractObject,<:Shapes.AbstractShape{T}}, obj2::Physical) where T
-#     Δx, Δy = obj1.x - obj2.x, obj1.y - obj2.y
-#     vxdt = -(obj1.vx - obj2.vx + Δy*obj2.ω*π/180)*dt
-#     vydt = -(obj1.vy - obj2.vy - Δx*obj2.ω*π/180)*dt
-#     #points = 
-#     lines = Vector{Lines{T}}(undef)
-#     for point in points(shape1)
-#         shape1 = transform(extrude(transform(obj1.shape, 0., 0., obj1.θ), vxdt, vydt, -obj1.ω*dt), Δx, Δy, 0.)
-#     end
-#     shape2 = transform(obj2.shape, 0, 0, obj2.θ)
-#     return shape1, shape2
-# end
-
-# """
-#     collisiontime(shape1, shape2)
-
-# Return the points where `shape1` intersects `shape2`.
-
-# """
-# function collisiontime(obj1::Physical{<:AbstractObject,<:Point}, obj2::Physical{<:AbstractObject,<:Line})
-
-#     t1 = (l1.x1 - l2.x1)*(l2.y1 - l2.y2) - (l1.y1 - l2.y1)*(l2.x1 - l2.x2)
-#     t2 = (l1.x1 - l2.x1)*(l1.y1 - l1.y2) - (l1.y1 - l2.y1)*(l1.x1 - l1.x2)
-#     d = (l1.x1 - l1.x2)*(l2.y1 - l2.y2) - (l1.y1 - l1.y2)*(l2.x1 - l2.x2)
-
-#     # For parallel lines, `d == 0`.  In this case, either the lines do not touch, or one of the following is true:
-#     # - one point from either line intersects with the other, or;
-#     # - two points from one line intersects with the other line.
-#     # In either case, the intersection is a line segment between these two points, and we return that.
-#     if iszero(d)
-#         return intersectcoeff(l1, Point(l2.x1, l2.y1)) || intersectcoeff(l1, Point(l2.x2, l2.y2)) ||
-#             intersectcoeff(l2, Point(l1.x1, l1.y1)) || intersectcoeff(l2, Point(l1.x2, l1.y2))
-#     end
-
-#     return t1/d, t2/d
-# end
+"""
+collisiontime(obj1::Physical, obj2::Physical) = minimum(union(timetrace(obj1, obj2), timetrace(obj2, obj1)))
 
 """
     collide!(obj1, obj2, nx, ny, x, y, dt; CR=1.0)
@@ -268,13 +228,14 @@ the coefficient of restitution.  It is `1` for a perfectly elastic
 collision and 0 for a perfectly inelastic collision.
 
 """
-function collide!(obj1::PhysicalObject, obj2::PhysicalObject, nx, ny, x, y, dt; CR=1.0)
+function collide!(obj1::PhysicalObject, obj2::PhysicalObject, nx, ny, x, y; CR=1.0)
     # See, e. g:
     # https://en.wikipedia.org/wiki/Elastic_collision#Two-dimensional_collision_with_two_moving_objects
     # https://en.wikipedia.org/wiki/Inelastic_collision
     # for details of the two-body collision
 
     # Step back to the time of collision
+    dt = collisiontime(obj1, obj2)
     timeevolve!(obj1, -dt)
     timeevolve!(obj2, -dt)
 

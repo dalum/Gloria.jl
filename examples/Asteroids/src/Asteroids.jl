@@ -120,11 +120,9 @@ function update!(self::Physical{Player}, t, dt)
     if ispressed(keyboard, "right") && abs(self.ω) < 360
         self.ω += self.wrapped.α*dt
     end
-end
 
-function update!(self::Physical{Player}, other::Physical{Rock}, t, dt)
-    if isalive(object_layer, other) && timeintersects(self, other)
-        destroyrock!(other, self)
+    for rock in filter(obj -> obj isa Physical{Rock} && isalive(object_layer, obj) && timeintersects(self, obj), object_layer)
+        destroyrock!(rock, self)
 
         if !any(x->x isa Physical{Shield}, object_layer)
             self.x, self.y = 0., 0.
@@ -140,18 +138,16 @@ end
 function update!(self::Physical{Shield}, t, dt)
     self.x = player.x
     self.y = player.y
-end
 
-function update!(self::Physical{Shield}, other::Physical{Rock}, t, dt)
-    if timeintersects(self, other)
-        destroyrock!(other, self)
+    for rock in filter(obj -> obj isa Physical{Rock} && isalive(object_layer, obj) && timeintersects(self, obj), object_layer)
+        destroyrock!(rock, self)
     end
 end
 
-function update!(self::Physical{LaserBeam}, other::Physical{Rock}, t, dt)
-    if isalive(object_layer, self) && timeintersects(self, other)
+function update!(self::Physical{LaserBeam}, t, dt)
+    for rock in filter(obj -> obj isa Physical{Rock} && isalive(object_layer, obj) && timeintersects(self, obj), object_layer)
         kill!(object_layer, self)
-        destroyrock!(other, self)
+        destroyrock!(rock, self)
     end
 end
 
@@ -181,9 +177,7 @@ function render!(layer::Layer, self::Controls, frame::Int, fps::Float64)
     end
 end
 
-const iswireframe = true
-
-function render!(layer::Layer, self::Physical{<:Union{Player,Shield,LaserBeam}}, frame::Int, fps::Float64)
+function render!(layer::Layer, self::Physical{<:Union{LaserBeam,Player,Shield}}, frame::Int, fps::Float64)
     render!(layer, self.shape, self.x, self.y, self.θ, color=colorant"#C0C0C0")
 end
 
@@ -235,7 +229,7 @@ end
 
 function nextlevel!(t)
     # Reset the current level
-    for obj in filter(x->(x isa Physical{LaserBeam} || x isa Physical{Rock}), object_layer)
+    for obj in filter(obj -> obj isa Physical{LaserBeam} || obj isa Physical{Rock}, object_layer)
         kill!(object_layer, obj)
     end
 

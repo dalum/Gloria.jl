@@ -80,6 +80,9 @@ intersects(w1::Windowing, w2::Windowing) = w1.x2 > w2.x1 && w2.x2 > w1.x1 && w1.
 # Basic algebra
 ##################################################
 
+Base.zero(::Point{T}) where {T} = Point(zero(T), zero(T))
+Base.zero(::Type{Point{T}}) where {T} = Point(zero(T), zero(T))
+Base.:-(p::Point) = Point(-p.x, -p.y)
 Base.:+(p1::Point, p2::Point) = Point(p1.x + p2.x, p1.y + p2.y)
 Base.:-(p1::Point, p2::Point) = Point(p1.x - p2.x, p1.y - p2.y)
 Base.:*(p::Point, n::Real) = Point(p1.x*n, p1.y*n)
@@ -120,6 +123,13 @@ vertices(p::Point) = [p]
 vertices(l::Line) = [Point(l.p0.x + strongmul(l.p1.x - l.p0.x, l.tmin), l.p0.y + strongmul(l.p1.y - l.p0.y, l.tmin)),
                      Point(l.p0.x + strongmul(l.p1.x - l.p0.x, l.tmax), l.p0.y + strongmul(l.p1.y - l.p0.y, l.tmax))]
 vertices(s::NonPrimitiveShape) = unique!(reduce(vcat, vertices.(s)))
+
+"""
+    edges(shape)
+"""
+edges(p::Point{T}) where {T} = Line{T}[]
+edges(l::Line) = [l]
+edges(s::NonPrimitiveShape) = unique!(reduce(vcat, edges.(s)))
 
 """
     translate(shape, x, y)
@@ -170,7 +180,7 @@ intersection of `line` with `shape`.
 
 """
 function trace(p::Point, l::Line)
-    d = (l.p1 - l.p0) × p
+    d = (l.p1 - l.p0) × (p - l.p0)
     # If `d` is zero, the point is in the line.
     if iszero(d)
         # We project `p` onto `l`,
