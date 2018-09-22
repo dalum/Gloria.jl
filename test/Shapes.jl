@@ -3,6 +3,7 @@ module TestShapes
 using Test, Random
 
 using Gloria.Shapes
+using Gloria.Shapes: intersects, extrude, trace, translate, rotate
 
 @testset "Intersection" begin
     p0 = Point(0., 0.)
@@ -22,28 +23,28 @@ using Gloria.Shapes
     @test p1[1:1] === (p1,)
     @test_throws BoundsError p1[2]
 
-    @test trace(p0, l1) == [0.5]
-    @test trace(p0, l2) == Float64[]
-    @test trace(p0, l3) == Float64[]
-    @test trace(p0, l4) == Float64[]
-    @test trace(p0, l5) == Float64[]
+    @test trace(p0, l1) == (0.5,)
+    @test trace(p0, l2) == ()
+    @test trace(p0, l3) == ()
+    @test trace(p0, l4) == ()
+    @test trace(p0, l5) == ()
 
-    @test trace(p1, l1) == Float64[]
-    @test trace(p1, l2) == [0.55]
-    @test trace(p2, l1) == trace(p2, l2) == Float64[]
-    @test trace(p2, l3) == Float64[] # Floating point errors means this will never hit
+    @test trace(p1, l1) == ()
+    @test trace(p1, l2) == (0.55,)
+    @test trace(p2, l1) == trace(p2, l2) == ()
+    @test trace(p2, l3) == () # Floating point errors means this will never hit
 
-    @test trace(l1, l2) == [0., 0.5]
-    @test trace(l2, l1) == [0.75, 1.]
-    @test trace(l3, l1) == Float64[]
-    @test trace(l3, l2) == [0.85]
-    @test trace(l3, l1) == trace(l1, l3) == Float64[]
+    @test trace(l1, l2) == (0., 0.5)
+    @test trace(l2, l1) == (0.75, 1.)
+    @test trace(l3, l1) == ()
+    @test trace(l3, l2) == (0.85,)
+    @test trace(l3, l1) == trace(l1, l3) == ()
 
-    @test trace(pol1, l1) == [0.25, 0.75]
-    @test trace(pol1, l4) == Float64[]
-    @test trace(pol1, [l1, l2]) == [0.25, 0.75, 0.]
-    @test trace(pol1, l3) ≈ [0.075]
-    @test trace(pol1, [l1, l2, l3, l4]) ≈ [0.25, 0.75, 0., 0.075]
+    @test collect(Float64, trace(pol1, l1)) == [0.25, 0.75]
+    @test collect(Float64, trace(pol1, l4)) == Float64[]
+    @test collect(Float64, trace(pol1, (l1, l2))) == [0.25, 0.75, 0.]
+    @test collect(Float64, trace(pol1, l3)) ≈ [0.075]
+    @test collect(Float64, trace(pol1, (l1, l2, l3, l4))) ≈ [0.25, 0.75, 0., 0.075]
 
     @test intersects(pol1, l1)
     @test intersects(l1, pol1)

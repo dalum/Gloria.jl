@@ -107,7 +107,7 @@ end
 
 function render!(window::Window, l::Line, x, y, θ = 0.0; scale = 1.0, color)
     setcolor!(window, color)
-    l = transform(l, rotate(θ), translate(x, y))
+    l = l |> rotate(θ) |> translate(x, y)
     x1 = l.p0.x*scale
     x2 = l.p1.x*scale
     y1 = l.p0.y*scale
@@ -115,32 +115,12 @@ function render!(window::Window, l::Line, x, y, θ = 0.0; scale = 1.0, color)
     drawline!(window, round(Int, x1), round(Int, y1), round(Int, x2), round(Int, y2))
 end
 
-# function render!(window::Window, c::Circle, x, y, θ = 0.0; scale = 1.0, samples::Int = 12, color)
-#     setcolor!(window, color)
-#     c = transform(c, x, y, θ)
-#     r = c.r*scale
-#     for n in 1:samples
-#         drawline!(window, round(Int, c.x + cos(2π*(n-1)/samples)*c.r),
-#                   round(Int, c.y + sin(2π*(n-1)/samples)*c.r),
-#                   round(Int, c.x + cos(2π*n/samples)*c.r),
-#                   round(Int, c.y + sin(2π*n/samples)*c.r))
-#     end
-#     return window
-# end
-
 function render!(window::Window, shape::NonPrimitiveShape, x, y, θ = 0.0; scale = 1.0, color)
     for s in shape
         render!(window, s, x, y, θ, scale=scale, color=color)
     end
     return window
 end
-
-# function render!(window::Window, cs::CompositeShape, x, y, θ = 0.0; scale = 1.0, color)
-#     for shape in cs.shapes
-#         render!(window, shape, x, y, θ, scale=scale, color=color)
-#     end
-#     return window
-# end
 
 function render!(window::Window, layer::AbstractLayer, r::RenderTask{<:AbstractShape})
     x = r.x*layer.scale + layer.x

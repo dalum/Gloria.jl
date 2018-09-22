@@ -31,7 +31,7 @@ include("keyboard.jl")
 include("audio.jl")
 
 using .Shapes: AbstractShape, Line, NonPrimitiveShape, Point,
-    rotate, transform, translate
+    rotate, translate
 
 include("graphics.jl")
 

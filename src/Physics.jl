@@ -1,14 +1,18 @@
 module Physics
 
-using DataStructures: CircularBuffer
-using Gloria: AbstractObject, Layer
-using ..Shapes: AbstractShape, Line, NonPrimitiveShape, Point, Windowing,
-    extrude, rotate, trace, transform, translate, vertices
+using DataStructures: CircularBuffer, SortedSet
+using Gloria: AbstractObject, Layer,
+    populate!
+using ..Shapes: AbstractShape, Line, NonPrimitiveShape, Point,
+    extrude, rotate, trace, translate, vertices
 
-export Physical, PhysicalObject,
-    collide!
+export Physical,
+    collide!, oncollision!, timeintersects
 
-abstract type PhysicalObject <: AbstractObject end
+import Gloria: after_update!, before_update!, render!, update!
+
+const COLLISION_TIME_OFFSET = 1e-8
+
 abstract type AbstractPhysicalState end
 
 mutable struct PhysicalState <: AbstractPhysicalState
@@ -39,7 +43,7 @@ Base.copy(state::PhysicalState) = PhysicalState(
 """
 
 """
-mutable struct Physical{T1 <: AbstractObject, T2 <: AbstractShape, T3 <: AbstractPhysicalState} <: PhysicalObject
+mutable struct Physical{T1 <: AbstractObject, T2 <: AbstractShape, T3 <: AbstractPhysicalState} <: AbstractObject
     wrapped::T1
     shape::T2
     state_history::CircularBuffer{T3}
@@ -55,6 +59,7 @@ Physical(wrapped, shape; static=false, m=1., I=1., x=0., y=0., θ=0., vx=0., vy=
     Physical(wrapped, shape, static, m, I, x, y, θ, vx, vy, ω)
 
 @inline currentstate(obj::Physical) = Core.getfield(obj, :state_history)[end]
+@inline previousstate(obj::Physical) = Core.getfield(obj, :state_history)[end-1]
 
 @inline Base.getproperty(obj::Physical, v::Symbol) = _getproperty(obj, Val(v))
 @inline _getproperty(obj::Physical, ::Val{V}) where V = Core.getfield(obj.wrapped, V)
@@ -96,45 +101,71 @@ setangularmass!(obj::Physical, I) = (obj.I = I; obj)
 setangle!(obj::Physical, θ) = (obj.θ = θ; obj)
 setangularvelocity!(obj::Physical, ω) = (obj.ω = ω; obj)
 
-@inline function translate!(obj::PhysicalObject, x′, y′)
+@inline function translate!(obj::Physical, x′, y′)
     x, y = position(obj)
     setposition!(obj, x + x′, y + y′)
 end
 
-@inline function accelerate!(obj::PhysicalObject, vx′, vy′)
-    vx, vy = velocity(obj)
-    setvelocity!(obj, vx + vx′, vy + vy′)
-end
+rotate!(obj::Physical, θ′) = setangle!(obj, angle(obj) + θ′)
 
-rotate!(obj::PhysicalObject, θ′) = setangle!(obj, angle(obj) + θ′)
-
-momentum(obj::PhysicalObject) = mass(obj).*velocity(obj)
-angularmomentum(obj::PhysicalObject) = angularmass(obj)*angularvelocity(obj)
-kineticenergy(obj::PhysicalObject) = 0.5mass(obj)*norm(velocity(obj))^2
-angularkineticenergy(obj::PhysicalObject) = 0.5angularmass(obj)*angularvelocity(obj)^2
-totalkineticenergy(obj::PhysicalObject) = kineticenergy(obj) + angularkineticenergy(obj)
+momentum(obj::Physical) = mass(obj).*velocity(obj)
+angularmomentum(obj::Physical) = angularmass(obj)*angularvelocity(obj)
+kineticenergy(obj::Physical) = 0.5mass(obj)*norm(velocity(obj))^2
+angularkineticenergy(obj::Physical) = 0.5angularmass(obj)*angularvelocity(obj)^2
+totalkineticenergy(obj::Physical) = kineticenergy(obj) + angularkineticenergy(obj)
 
 ##################################################
 # Update
 ##################################################
 
-import Gloria: after_update!, before_update!, render!, update!
+function oncollision!(::Physical, ::Physical, t::Float64, dt::Float64) end
 
-function before_update!(obj::PhysicalObject, t::Float64, dt::Float64)
-    push!(obj.state_history, copy(currentstate(obj)))
-    currentstate(obj).t = t
+function before_update!(layer::Layer{Physical}, t::Float64, dt::Float64)
+    populate!(layer)
+    for obj in layer.objects
+        before_update!(obj, t, dt)
+    end
+    while (cs = collisions(layer, t, dt); length(cs) > 0)
+        c = first(cs)
+        δt = t - c.t
+
+        for obj in layer.objects
+            timeevolve!(obj, -δt)
+            currentstate(obj).t = c.t
+        end
+        collide!(c.obj1, c.obj2, 0., 1., 0., 0.)
+        for obj in layer.objects
+            savestate!(obj, c.t)
+            timeevolve!(obj, δt)
+            currentstate(obj).t = t
+        end
+    end
+    return layer
+end
+
+function before_update!(obj::Physical, t::Float64, dt::Float64)
+    savestate!(obj, t)
     if !isstatic(obj)
         timeevolve!(obj, dt)
     end
+    return obj
 end
 
 ##################################################
 # Time translation
 ##################################################
 
-@inline function timeevolve!(obj::PhysicalObject, dt::Float64)
-    vx, vy = velocity(obj)
-    ω = angularvelocity(obj)
+function savestate!(obj::Physical, t::Float64)
+    push!(obj.state_history, copy(currentstate(obj)))
+    currentstate(obj).t = t
+    return obj
+end
+
+function timeevolve!(obj::Physical, dt::Float64)
+    state = currentstate(obj)
+    vx = state.vx
+    vy = state.vy
+    ω = state.ω
     translate!(obj, dt*vx, dt*vy)
     rotate!(obj, dt*ω)
 end
@@ -155,9 +186,9 @@ end
 # Collision
 ##################################################
 
-intersects(obj1::PhysicalObject, obj2::PhysicalObject) = intersects(
-    transform(obj1.shape, rotate(obj1.θ), translate(obj1.x, obj1.y)),
-    transform(obj2.shape, rotate(obj2.θ), translate(obj2.x, obj2.y)))
+intersects(obj1::Physical, obj2::Physical) = intersects(
+    obj1.shape |> rotate(obj1.θ) |> translate(obj1.x, obj1.y),
+    obj2.shape |> rotate(obj2.θ) |> translate(obj2.x, obj2.y))
 
 function timecapture(shape1::AbstractShape, shape2::AbstractShape, (state1, prevstate1)::Tuple{PhysicalState, PhysicalState}, (state2, prevstate2)::Tuple{PhysicalState, PhysicalState})
     Δx = prevstate2.x - prevstate1.x
@@ -171,13 +202,13 @@ function timecapture(shape1::AbstractShape, shape2::AbstractShape, (state1, prev
     δθ2 = state2.θ - prevstate2.θ
 
     shape = rotate(shape1, prevstate1.θ)
-    lines = vertices(shape2) |> rotate(prevstate2.θ) |>
-        extrude(rotate(δθ2), translate(δx2, δy2), translate(-δx1, δy1), translate(Δx, Δy), rotate(-δθ1), translate(-Δx, -Δy)) |>
+    lines = collect(vertices(shape2)) |> rotate(prevstate2.θ) |>
+        extrude(rotate(δθ2) |> translate(δx2, δy2) |> translate(-δx1, -δy1) |> translate(Δx, Δy) |> rotate(-δθ1) |> translate(-Δx, -Δy)) |>
         translate(Δx, Δy)
     return shape, lines
 end
 
-function timecapture(obj1::PhysicalObject, obj2::PhysicalObject)
+function timecapture(obj1::Physical, obj2::Physical)
     state1, state2 = currentstate(obj1), currentstate(obj2)
     prevstate1, prevstate2 = obj1.state_history[end-1], obj2.state_history[end-1]
     return timecapture(obj1.shape, obj2.shape, (state1, prevstate1), (state2, prevstate2))
@@ -186,28 +217,47 @@ end
 
 function timetrace(shape1::AbstractShape, shape2::AbstractShape, (state1, prevstate1)::Tuple{PhysicalState, PhysicalState}, (state2, prevstate2)::Tuple{PhysicalState, PhysicalState})
     dt = state1.t - prevstate1.t
-    return dt .* (trace(timecapture(shape1, shape2, (state1, prevstate1), (state2, prevstate2))...) .- 1.)
+    ts = trace(timecapture(shape1, shape2, (state1, prevstate1), (state2, prevstate2))...)
+    return dt .* (ts .- 1.)
 end
 
-function timetrace(obj1::PhysicalObject, obj2::PhysicalObject)
+function timetrace(obj1::Physical, obj2::Physical)
     state1, state2 = currentstate(obj1), currentstate(obj2)
     prevstate1, prevstate2 = obj1.state_history[end-1], obj2.state_history[end-1]
     return timetrace(obj1.shape, obj2.shape, (state1, prevstate1), (state2, prevstate2))
 end
 
-timeintersects(obj1::PhysicalObject, obj2::PhysicalObject) =
+timeintersects(obj1::Physical, obj2::Physical) =
     length(timetrace(obj1, obj2)) > 0 || length(timetrace(obj2, obj1)) > 0
 
-function centerofmass(objs)
-    mx = my = M = 0.0
-    for obj in objs
-        x′, y′ = position(obj)
-        m = mass(obj)
-        M += m
-        mx += m*x′
-        my += m*y′
+##################################################
+# Collisions
+##################################################
+
+struct Collision{T1 <: Physical, T2 <: Physical}
+    obj1::T1
+    obj2::T2
+    t::Float64
+end
+Base.:(==)(col1::Collision, col2::Collision) = col1.t == col2.t && ((col1.obj1 == col2.obj1 && col1.obj2 == col2.obj2) || (col1.obj1 == col2.obj2 && col1.obj2 == col2.obj1))
+Base.isless(col1::Collision, col2::Collision) = col1.t < col2.t
+
+"""
+    collisions(layer)
+
+Return a sorted array of collisions that happened in the last update
+step.
+
+"""
+function collisions(layer::Layer{<:Physical}, t::Float64, dt::Float64)
+    cs = SortedSet{Collision}()
+    for i in 1:length(layer.objects), j in i+1:length(layer.objects)
+        ct = collisiontime(layer.objects[i], layer.objects[j])
+        if ct !== nothing && ct + dt > COLLISION_TIME_OFFSET
+            push!(cs, Collision(layer.objects[i], layer.objects[j], t + ct - COLLISION_TIME_OFFSET))
+        end
     end
-    return mx / M, my / M
+    return cs
 end
 
 """
@@ -217,7 +267,14 @@ Return the time `dt` into past to find the earliest point where
 `shape1` intersects `shape2`.
 
 """
-collisiontime(obj1::Physical, obj2::Physical) = minimum(union(timetrace(obj1, obj2), timetrace(obj2, obj1)))
+function collisiontime(obj1::Physical, obj2::Physical)
+    ts = union(timetrace(obj1, obj2), timetrace(obj2, obj1))
+    if length(ts) > 0
+        return minimum(ts)
+    else
+        return nothing
+    end
+end
 
 """
     collide!(obj1, obj2, nx, ny, x, y, dt; CR=1.0)
@@ -228,16 +285,11 @@ the coefficient of restitution.  It is `1` for a perfectly elastic
 collision and 0 for a perfectly inelastic collision.
 
 """
-function collide!(obj1::PhysicalObject, obj2::PhysicalObject, nx, ny, x, y; CR=1.0)
+function collide!(obj1::Physical, obj2::Physical, nx, ny, x, y; CR=1.0)
     # See, e. g:
     # https://en.wikipedia.org/wiki/Elastic_collision#Two-dimensional_collision_with_two_moving_objects
     # https://en.wikipedia.org/wiki/Inelastic_collision
     # for details of the two-body collision
-
-    # Step back to the time of collision
-    dt = collisiontime(obj1, obj2)
-    timeevolve!(obj1, -dt)
-    timeevolve!(obj2, -dt)
 
     # Get properties
     m1, m2 = isstatic(obj1) ? Inf : mass(obj1), isstatic(obj2) ? Inf : mass(obj2)
@@ -253,19 +305,12 @@ function collide!(obj1::PhysicalObject, obj2::PhysicalObject, nx, ny, x, y; CR=1
     f2 = isinf(m1) ? 1.0 : m1 / (m1 + m2)
 
     C1 = -(1 + CR) * f1 * (Δvx*nx + Δvy*ny)
-    C2 = -(1 + CR) * f2 * (Δvx*nx + Δvy*ny)
+    C2 = (1 + CR) * f2 * (Δvx*nx + Δvy*ny)
 
-    Δvx1′ = C1 * nx
-    Δvy1′ = C1 * ny
-    Δvx2′ = -C2 * nx
-    Δvy2′ = -C2 * ny
-
-    accelerate!(obj1, Δvx1′, Δvy1′)
-    accelerate!(obj2, Δvx2′, Δvy2′)
-
-    # Evolve forward to current time
-    timeevolve!(obj1, dt)
-    timeevolve!(obj2, dt)
+    obj1.vx += C1 * nx
+    obj1.vy += C1 * ny
+    obj2.vx += C2 * nx
+    obj2.vy += C2 * ny
 
     return obj1
 end

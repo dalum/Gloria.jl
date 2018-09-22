@@ -53,10 +53,12 @@ const DEFAULT_EVENT_LOOP = @loop "event" (event_data = zeros(UInt8, 56)) begin
     end
 end
 
-const DEFAULT_UPDATE_LOOP = @loop "update" (state[:t0] = time(); state[:t] = 0.0; state[:dt] = 0.0) begin
-    state[:dt] = min(t1 - state[:t0], 5/target_speed)
-    state[:t0] = t1
-    state[:t] += state[:dt]
+const DEFAULT_UPDATE_LOOP = @loop "update" (state[:t0] = time(); state[:t] = 0.0; state[:dt] = 0.0; state[:step] = true) begin
+    if state[:step]
+        state[:dt] = min(t1 - state[:t0], 1/target_speed)
+        state[:t0] = t1
+        state[:t] += state[:dt]
+    end
 
     for event in window.event_queue
         onevent!(window, event, state[:t], state[:dt])
@@ -68,9 +70,12 @@ const DEFAULT_UPDATE_LOOP = @loop "update" (state[:t0] = time(); state[:t] = 0.0
         pop!(window.timer_queue).fn()
     end
 
-    before_update!(window, state[:t], state[:dt])
-    update!(window, state[:t], state[:dt])
-    after_update!(window, state[:t], state[:dt])
+    if state[:step]
+        before_update!(window, state[:t], state[:dt])
+        update!(window, state[:t], state[:dt])
+        after_update!(window, state[:t], state[:dt])
+    end
+    state[:step] = true
 end
 
 const DEFAULT_RENDER_LOOP = @loop "render" (state[:frame] = 1; fps = 0.0; state[:t0] = time()) begin

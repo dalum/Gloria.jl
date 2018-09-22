@@ -1,9 +1,11 @@
 module Particles
 
 import Gloria: onevent!, render!, update!
-using Gloria: Gloria, AbstractObject, AbstractShape, Audio, Circle, Event, Layer, Line, Lines, Point, Polygon, Scene, Texture, Window,
+using Gloria: Gloria, AbstractObject, AbstractShape, Audio, Event, Layer, Scene, Texture, Window,
     add!, kill!, play!,
-    getmousestate, inside, intersects, isalive, isbutton, iskey, ispressed, tocoordinates
+    getmousestate, isalive, isbutton, iskey, ispressed, tocoordinates
+
+using Gloria.Shapes: Line, Point, circle, inside, intersects
 
 using Gloria.Physics
 
@@ -16,12 +18,12 @@ using Colors: RGB, @colorant_str
 mutable struct Controls <: AbstractObject end
 
 struct Floor <: AbstractObject end
-Physical{Floor}(y) = Physical(Floor(), Line(-width/2, 0., width/2, 0.), y=y, static=true)
+Physical{Floor}(y) = Physical(Floor(), Line(Point(-width/2, 0.), Point(width/2, 0.)), y=y, static=true)
 
 mutable struct Particle <: AbstractObject
     color::RGB
 end
-Physical{Particle}(color, x, y) = Physical(Particle(color), Circle(0., 0., 50.), x=x, y=y)
+Physical{Particle}(color, x, y) = Physical(Particle(color), circle(Point(0., 0.), 50., samples=12), x=x, y=y)
 
 ##################################################
 # Events
@@ -29,6 +31,7 @@ Physical{Particle}(color, x, y) = Physical(Particle(color), Circle(0., 0., 50.),
 
 function onevent!(::Controls, e::Event{:key_down})
     iskey(e, "escape") && Gloria.quit!(window, e)
+    iskey(e, "space") && (window.loops["update"].state[:step] = true)
 end
 
 function onevent!(::Controls, e::Event{:mousebutton_down})
@@ -41,10 +44,8 @@ end
 # Update
 ##################################################
 
-function update!(self::Physical{Particle}, other::Physical{Floor}, t, dt)
-    if intersects(self, other, dt)
-        collide!(self, other, 0., 1., 0., 0., dt, CR=1.0)
-    end
+function update!(self::Physical{Particle}, t, dt)
+    self.vy += 500.0*dt
 end
 
 ##################################################
@@ -53,6 +54,14 @@ end
 
 function render!(layer::Layer, self::Physical{Particle}, frame::Int, fps::Float64)
     render!(layer, self.shape, self.x, self.y, self.θ, color=self.color)
+    # for obj in filter(obj -> obj !== self, object_layer)
+    #     shape, lines = Physics.timecapture(self, obj)
+    #     render!(layer, shape, 0., 0., 0., color=colorant"#F00")
+    #     render!(layer, lines, 0., 0., 0., color=colorant"#F00")
+    #     shape, lines = Physics.timecapture(obj, self)
+    #     render!(layer, shape, 0., 0., 0., color=colorant"#F00")
+    #     render!(layer, lines, 0., 0., 0., color=colorant"#F00")
+    # end
 end
 
 function render!(layer::Layer, self::Physical{Floor}, frame::Int, fps::Float64)
@@ -75,18 +84,17 @@ end
 const width, height = 800, 600
 const controls_layer = Layer([Controls()], width/2, height/2)
 
-const object_layer = Layer(PhysicalObject[], width/2, height/2)
+const object_layer = Layer(Physical[], width/2, height/2)
 
 const scene = Scene(controls_layer, object_layer, color=colorant"#D0D0D0")
 const window = Window("Inside", width, height, scene, fullscreen=false)
 
 const keyboard = Gloria.KeyboardState()
 
-add!(object_layer, Gravity(500., θ = 90.))
 add!(object_layer, Physical{Floor}(200.))
-# for _ in 1:200
-#     add!(object_layer, Physical{Particle}(colorant"#000", rand(-width/2:width/2), rand(-width/2:width/2)))
-# end
+for _ in 1:1
+    add!(object_layer, Physical{Particle}(colorant"#000", rand(-width/2:width/2), rand(-height/2:(-height/2+200))))
+end
 
 function main(;keepalive=true)
     Gloria.run!(window)
