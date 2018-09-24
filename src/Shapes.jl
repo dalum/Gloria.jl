@@ -42,7 +42,7 @@ const Lines{T} = Union{AbstractVector{<:Line{T}}, AbstractSet{<:Line{T}}, NTuple
 
 polyline(points) = [Line(p0, p1) for (p0, p1) in partition(points, 2, 1)]
 polygon(points) = polyline(flatten((points, first(points))))
-circle(c::Point, r::Real; samples=20) = polyline(Point(c.x + r*cos(2π*i/samples), c.y + r*sin(2π*i/samples)) for i in 0:samples)
+circle(c::Point, r::Real; samples=20, θ=0.) = polyline(Point(c.x + r*cos(2π*i/samples + θ*π/180), c.y + r*sin(2π*i/samples + θ*π/180)) for i in 0:samples)
 
 const AbstractShape{T} = Union{AbstractPrimitiveShape{T}, NonPrimitiveShape{T}}
 
@@ -96,10 +96,19 @@ Base.zero(::Type{Point{T}}) where {T} = Point(zero(T), zero(T))
 Base.:-(p::Point) = Point(-p.x, -p.y)
 Base.:+(p1::Point, p2::Point) = Point(p1.x + p2.x, p1.y + p2.y)
 Base.:-(p1::Point, p2::Point) = Point(p1.x - p2.x, p1.y - p2.y)
-Base.:*(p::Point, n::Real) = Point(p1.x*n, p1.y*n)
-Base.:/(p::Point, n::Real) = Point(p1.x/n, p1.y/n)
+Base.:*(p::Point, n::Real) = Point(p.x*n, p.y*n)
+Base.:*(n::Real, p::Point) = Point(p.x*n, p.y*n)
+Base.:/(p::Point, n::Real) = Point(p.x/n, p.y/n)
 LinearAlgebra.cross(p1::Point, p2::Point) = p1.x*p2.y - p2.x*p1.y
+LinearAlgebra.cross(n::Float64, p::Point) = Point(-n*p.y, p.x*n)
+LinearAlgebra.cross(p::Point, n::Float64) = Point(n*p.y, -p.x*n)
 LinearAlgebra.dot(p1::Point, p2::Point) = p1.x*p2.x + p1.y*p2.y
+LinearAlgebra.norm(p::Point) = sqrt(p.x*p.x + p.y*p.y)
+LinearAlgebra.norm(l::Line) = norm(l.p1 - l.p0)
+LinearAlgebra.normalize(p::Point) = (N = norm(p); Point(p.x/N, p.y/N))
+LinearAlgebra.normalize(l::Line) = normalize(l.p1 - l.p0)
+
+Base.isapprox(p1::Point, p2::Point) = isapprox(p1.x, p2.x) && isapprox(p1.y, p2.y)
 
 ##################################################
 # Helper functions
@@ -141,6 +150,46 @@ edges(p::Point) = ()
 edges(l::Line) = (l,)
 edges(s::NonPrimitiveShape) = flatten(map(edges, s))
 
+##################################################
+# Distances
+##################################################
+
+"""
+    projection(line, point)
+
+Return the projection of `point` onto `line`.  If the `point` is not
+normal to the `line`, return `nothing` instead.
+
+"""
+function projection(l::Line, p::Point)
+    d = (l.p1 - l.p0)
+    a = (d ⋅ (p - l.p0)) / (d ⋅ d)
+    0 <= a <= 1 && return l.p0 + d * a
+    return nothing
+end
+
+closestprojection(p1::Point, p2::Point) = p1
+closestprojection(l::Line, p::Point) = projection(l, p)
+function closestprojection(s::NonPrimitiveShape, p::Point)
+    d = Inf
+    pr = p
+    for ps in s
+        pr′ = closestprojection(ps, p)
+        if pr′ !== nothing
+            d′ = norm(p - pr′)
+            if d′ < d
+                d = d′
+                pr = pr′
+            end
+        end
+    end
+    return pr
+end
+
+##################################################
+# Transformations
+##################################################
+
 struct Transformation{T}
     c::T
     s::T
@@ -173,6 +222,12 @@ translate(s::AbstractShape, x, y) = translate(x, y)(s)
 rotate(θ) = Transformation(cosd(θ), sind(θ), 0., 0.)
 rotate(s::AbstractShape, θ) = rotate(θ)(s)
 
+normal(l::Line) = normalize(rotate(90)(l))
+function normal(l::Line, p::Point)
+    n = normal(l)
+    return (p - l.p0) ⋅ n >= 0 ? n : -n
+end
+
 """
     extrude(transforms...)
 """
@@ -200,7 +255,7 @@ function trace(p::Point, l::Line)
         # We project `p` onto `l`,
         a = ((p - l.p0) ⋅ (l.p1 - l.p0)) / ((l.p1 - l.p0) ⋅ (l.p1 - l.p0))
         # and check if it is outside the bounds:
-        (a < 0 || 1 < a || isnan(a)) && return ()
+        (a < 0 || 1 <= a || isnan(a)) && return ()
         # otherwise, we have a match!
         return (a,)
     end
@@ -224,7 +279,7 @@ function trace(l1::Line, l2::Line)
             a2 = ((v2 - l2.p0) ⋅ (l2.p1 - l2.p0)) / ((l2.p1 - l2.p0) ⋅ (l2.p1 - l2.p0))
             amin, amax = min(a1, a2), max(a1, a2)
             # In the 1D projection, we check if there is no overlap,
-            (amax < 0 || amin > 1 || isnan(amin) || isnan(amax)) && return ()
+            (amax < 0 || 1 <= amin || isnan(amin) || isnan(amax)) && return ()
             # in which case we return the parameters corresponding to
             # the line segment of the overlap:
             return (max(amin, 0), min(amax, 1))
@@ -239,7 +294,7 @@ function trace(l1::Line, l2::Line)
     # `l1`, and return `t2` if it is on `l2` (TODO: include simple
     # proof why this works).  See above for the definition of the
     # operator `⋖` (`\lessdot`).
-    if 0 <= t1/d <= 1 && 0 <= t2/d <= 1
+    if 0 <= t1/d < 1 && 0 <= t2/d < 1
         return (t2/d,)
     end
     return ()
@@ -265,6 +320,30 @@ function trace(s::AbstractShape, ls::Lines)
 end
 
 """
+    tracepoint(shape, line)
+"""
+function tracepoint(s::AbstractShape, l::Line)
+    return ((t, l.p0 + (l.p1 - l.p0)*t) for t in trace(s, l))
+end
+
+function tracepoint(s::AbstractShape, ls::Lines)
+    !intersects(BoundingBox(s), BoundingBox(ls)) && return ()
+    return flatten(tracepoint(s, l) for l in ls)
+end
+
+tracepointnormal(p::Point, l::Line) = ((t, l.p0 + (l.p1 - l.p0)*t, normal(l, p)) for t in trace(p, l))
+function tracepointnormal(l1::Line, l2::Line)
+    n = normal(l1, l2.p0)
+    return ((t, l2.p0 + (l2.p1 - l2.p0)*t, n) for t in trace(l1, l2))
+end
+tracepointnormal(s::NonPrimitiveShape, l::Line) = flatten(map(ps -> tracepointnormal(ps, l), s))
+
+function tracepointnormal(s::AbstractShape, ls::Lines)
+    !intersects(BoundingBox(s), BoundingBox(ls)) && return ()
+    return flatten(tracepointnormal(s, l) for l in ls)
+end
+
+"""
     intersects(shape)
 """
 intersects(s2::AbstractShape) = (s1) -> intersects(s1, s2)
@@ -279,7 +358,7 @@ function intersects(p::Point, l::Line)
     d = (l.p1 - l.p0) × (p - l.p0)
     if iszero(d)
         a = ((p - l.p0) ⋅ (l.p1 - l.p0)) / ((l.p1 - l.p0) ⋅ (l.p1 - l.p0))
-        (a < 0 || a > 1) && return false
+        (a < 0 || 1 <= a || isnan(a)) && return false
         return true
     end
     return false
@@ -296,13 +375,13 @@ function intersects(l1::Line, l2::Line)
             a1 = ((v1 - l2.p0) ⋅ (l2.p1 - l2.p0)) / ((l2.p1 - l2.p0) ⋅ (l2.p1 - l2.p0))
             a2 = ((v2 - l2.p0) ⋅ (l2.p1 - l2.p0)) / ((l2.p1 - l2.p0) ⋅ (l2.p1 - l2.p0))
             amin, amax = min(a1, a2), max(a1, a2)
-            (amax < 0 || 1 < amin) && return false
+            (amax < 0 || 1 <= amin || isnan(amax) || isnan(amin)) && return false
             return true
         end
         return false
     end
     t2 = (l2.p0 - l1.p0) × (l1.p1 - l1.p0)
-    if 0 <= t1/d <= 1 && 0 <= t2/d <= 1
+    if 0 <= t1/d < 1 && 0 <= t2/d < 1
         return true
     end
     return false
@@ -329,9 +408,8 @@ at an angle `θ`.  A shape is determined to be inside if either:
    `shape1` an odd number of times.
 
 """
-inside(p1::Point, p2::Point, θ) = intersects(p1, Line(Point(p.x, p.y), Point(p.x - cosd(θ)*1e6, p.y - sind(θ)*1e6)))
-inside(l::Line, p::Point, θ) = intersects(l, Line(Point(p.x, p.y), Point(p.x - cosd(θ)*1e6, p.y - sind(θ)*1e6)))
-inside(p::Point, l::Line, θ) = inside(l, p, θ)
-inside(s1::AbstractShape, s2::AbstractShape, θ) = intersects(s1, s2) || any(p -> inside(s1, p, θ), vertices(s2)) || any(p -> inside(s2, p, θ), vertices(s1))
+inside(p1::Point, p2::Point, θ) = intersects(p1, Line(p2, p2 + Point(cosd(θ)*1e6, sind(θ)*1e6)))
+inside(l::Line, p::Point, θ) = intersects(l, Line(p, p + Point(cosd(θ)*1e6, sind(θ)*1e6)))
+inside(s::NonPrimitiveShape, p::Point, θ) = isodd(count(q -> inside(q, p, θ), edges(s)))
 
 end #module

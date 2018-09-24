@@ -53,8 +53,8 @@ const DEFAULT_EVENT_LOOP = @loop "event" (event_data = zeros(UInt8, 56)) begin
     end
 end
 
-const DEFAULT_UPDATE_LOOP = @loop "update" (state[:t0] = time(); state[:t] = 0.0; state[:dt] = 0.0; state[:step] = true) begin
-    if state[:step]
+const DEFAULT_UPDATE_LOOP = @loop "update" (state[:t0] = time(); state[:t] = 0.0; state[:dt] = 0.0; state[:step] = false; state[:paused] = false) begin
+    if !state[:paused]
         state[:dt] = min(t1 - state[:t0], 1/target_speed)
         state[:t0] = t1
         state[:t] += state[:dt]
@@ -70,12 +70,14 @@ const DEFAULT_UPDATE_LOOP = @loop "update" (state[:t0] = time(); state[:t] = 0.0
         pop!(window.timer_queue).fn()
     end
 
-    if state[:step]
+    if !state[:paused]
         before_update!(window, state[:t], state[:dt])
         update!(window, state[:t], state[:dt])
         after_update!(window, state[:t], state[:dt])
     end
-    state[:step] = true
+    if state[:step]
+        state[:paused] = true
+    end
 end
 
 const DEFAULT_RENDER_LOOP = @loop "render" (state[:frame] = 1; fps = 0.0; state[:t0] = time()) begin
@@ -140,11 +142,10 @@ end
 function onevent!(::AbstractObject, ::Event) end
 function onevent!(::AbstractObject, ::Event, t, dt) end
 for fn in [:before_update!, :update!, :after_update!]
-    @eval function $fn(::AbstractObject, t, dt) end
+    @eval function $fn(::AbstractObject, ::AbstractLayer, t, dt) end
 end
-function update!(::AbstractObject, ::AbstractObject, t, dt) end
 function render!(::Window, ::AbstractObject, frame, fps) end
-function render!(::Layer, ::AbstractObject, frame, fps) end
+function render!(::AbstractLayer, ::AbstractObject, frame, fps) end
 
 onevent!(window::Window, ::Event{:notsupported}) = window
 function onevent!(window::Window, e::Event)
@@ -159,19 +160,19 @@ onevent!(window::Window, e::Event{:quit}) = quit!(window, e)
 onevent!(window::Window, e::Event, t, dt) = length(window.scene_stack) > 0 ? onevent!(activescene(window), e, t, dt) : window
 
 for fn in [:before_update!, :update!, :after_update!]
-    @eval $fn(window::Window, t::Float64, dt::Float64) = length(window.scene_stack) > 0 ? $fn(activescene(window), t, dt) : nothing
+    @eval $fn(window::Window, t::Float64, dt::Float64) = length(window.scene_stack) > 0 ? $fn(activescene(window), window, t, dt) : nothing
 end
 
 render!(window::Window, frame::Int, fps::Float64) = length(window.scene_stack) > 0 ? render!(window, activescene(window), frame, fps) : nothing
 
-function onevent!(scene::Scene, e::Event)
+function onevent!(scene::AbstractScene, e::Event)
     for layer in scene.layers
         onevent!(layer, e)
     end
     return scene
 end
 
-function onevent!(scene::Scene, e::Event, t, dt)
+function onevent!(scene::AbstractScene, e::Event, t, dt)
     for layer in scene.layers
         onevent!(layer, e, t, dt)
     end
@@ -180,15 +181,15 @@ end
 
 
 for fn in [:before_update!, :update!, :after_update!]
-    @eval function $fn(scene::Scene, t::Float64, dt::Float64)
+    @eval function $fn(scene::AbstractScene, ::Window, t::Float64, dt::Float64)
         for layer in scene.layers
-            $fn(layer, t, dt)
+            $fn(layer, scene, t, dt)
         end
         return scene
     end
 end
 
-function render!(window::Window, scene::Scene, frame::Int, fps::Float64)
+function render!(window::Window, scene::AbstractScene, frame::Int, fps::Float64)
     setcolor!(window, scene.color)
     clear!(window)
     for layer in scene.layers
@@ -197,45 +198,45 @@ function render!(window::Window, scene::Scene, frame::Int, fps::Float64)
     present!(window)
 end
 
-function onevent!(layer::Layer, e::Event)
+function onevent!(layer::AbstractLayer, e::Event)
     for obj in layer.objects
         onevent!(obj, e)
     end
     return layer
 end
 
-function onevent!(layer::Layer, e::Event, t, dt)
+function onevent!(layer::AbstractLayer, e::Event, t, dt)
     for obj in layer.objects
         onevent!(obj, e, t, dt)
     end
     return layer
 end
 
-function before_update!(layer::Layer, t::Float64, dt::Float64)
+function before_update!(layer::AbstractLayer, ::AbstractScene, t::Float64, dt::Float64)
     populate!(layer)
     for obj in layer.objects
-        before_update!(obj, t, dt)
+        before_update!(obj, layer, t, dt)
     end
     return layer
 end
 
-function update!(layer::Layer, t::Float64, dt::Float64)
+function update!(layer::AbstractLayer, ::AbstractScene, t::Float64, dt::Float64)
     for obj in layer.objects
-        update!(obj, t, dt)
+        update!(obj, layer, t, dt)
     end
     return layer
 end
 
-function after_update!(layer::Layer, t::Float64, dt::Float64)
+function after_update!(layer::AbstractLayer, ::AbstractScene, t::Float64, dt::Float64)
     for obj in layer.objects
-        after_update!(obj, t, dt)
+        after_update!(obj, layer, t, dt)
     end
     cleanup!(layer)
     return layer
 end
 
-function render!(window::Window, layer::Layer, frame::Int, fps::Float64)
-    if layer.show
+function render!(window::Window, layer::AbstractLayer, frame::Int, fps::Float64)
+    if visible(layer)
         # sort!(layer.objects, by=layer.sortby)
         for obj in layer.objects
             render!(layer, obj, frame, fps)

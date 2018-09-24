@@ -28,12 +28,12 @@ present!(window::Window) = SDL.RenderPresent(window.render_ptr)
 # Generic rendering
 ##################################################
 
-function render!(layer::Layer, source::Union{AbstractGraphics,AbstractShape}, x, y, θ = 0.0; scale = 1.0, offset_x = 0, offset_y = 0, flip::Symbol = :none, color = colorant"black")
+function render!(layer::AbstractLayer, source::Union{AbstractGraphics,AbstractShape}, x, y, θ = 0.0; scale = 1.0, offset_x = 0, offset_y = 0, flip::Symbol = :none, color = colorant"black")
     push!(layer.render_tasks, RenderTask(source, x, y, θ, scale, offset_x, offset_y, flip, color))
     return layer
 end
 
-function render!(layer::Layer, text::Text, x, y, θ = 0.0; scale = 1.0, offset_x = 0, offset_y = 0, flip::Symbol = :none, color = colorant"black")
+function render!(layer::AbstractLayer, text::Text, x, y, θ = 0.0; scale = 1.0, offset_x = 0, offset_y = 0, flip::Symbol = :none, color = colorant"black")
     push!(layer.render_tasks, RenderTask(text.graphics, x, y, θ, scale, offset_x, offset_y, flip, color))
     return layer
 end
@@ -112,7 +112,11 @@ function render!(window::Window, l::Line, x, y, θ = 0.0; scale = 1.0, color)
     x2 = l.p1.x*scale
     y1 = l.p0.y*scale
     y2 = l.p1.y*scale
-    drawline!(window, round(Int, x1), round(Int, y1), round(Int, x2), round(Int, y2))
+    try
+        drawline!(window, round(Int, x1), round(Int, y1), round(Int, x2), round(Int, y2))
+    catch e
+        println(l)
+    end
 end
 
 function render!(window::Window, shape::NonPrimitiveShape, x, y, θ = 0.0; scale = 1.0, color)

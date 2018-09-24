@@ -1,5 +1,6 @@
-abstract type AbstractScene end
-abstract type AbstractLayer end
+abstract type AbstractScene{T} end
+abstract type AbstractLayer{T} end
+abstract type AbstractWindow{T} end
 
 struct Event{TYPE}
     fields::Dict{Symbol, Any}
@@ -33,7 +34,7 @@ Base.isless(a::Timeout, b::Timeout) = isless(b.t1, a.t1)
 A Window.
 
 """
-mutable struct Window{T <: AbstractVector{<:AbstractScene}}
+mutable struct Window{T <: AbstractVector{<:AbstractScene}} <: AbstractWindow{T}
     window_ptr::Ptr{SDL.Window}
     render_ptr::Ptr{SDL.Renderer}
     scene_stack::T
@@ -86,7 +87,7 @@ activescene(window::Window) = window.scene_stack[end]
 inside a given `Window` at any time.
 
 """
-mutable struct Scene{T <: AbstractVector{<:AbstractLayer}} <: AbstractScene
+mutable struct Scene{T <: AbstractVector{<:AbstractLayer}} <: AbstractScene{T}
     layers::T
     color::Colors.RGB
 end
@@ -111,7 +112,7 @@ end
 A Layer object runs inside a Scene.
 
 """
-mutable struct Layer{T} <: AbstractLayer
+mutable struct Layer{T} <: AbstractLayer{T}
     objects::OrderedSet{T}
     x::Float64
     y::Float64
@@ -129,11 +130,13 @@ end
 Layer(objects::OrderedSet{T}, args...; kwargs...) where {T} = Layer{T}(objects, args...; kwargs...)
 Layer(objects::Vector, args...; kwargs...) = Layer(OrderedSet(objects), args...; kwargs...)
 
-Base.show(io::IO, layer::Layer) = print(io, "Layer(", join([layer.objects, layer.x, layer.y, layer.θ], ", "), ")")
+visible(layer::Layer) = layer.show
 
-Base.iterate(layer::Layer) = iterate(layer.objects)
-Base.iterate(layer::Layer, state) = iterate(layer.objects, state)
-Base.filter(f, layer::Layer) = filter(f, layer.objects)
+Base.show(io::IO, layer::AbstractLayer) = print(io, "Layer(", join([layer.objects, layer.x, layer.y, layer.θ], ", "), ")")
+
+Base.iterate(layer::AbstractLayer) = iterate(layer.objects)
+Base.iterate(layer::AbstractLayer, state) = iterate(layer.objects, state)
+Base.filter(f, layer::AbstractLayer) = filter(f, layer.objects)
 
 """
     wait(window::Window)
@@ -168,8 +171,8 @@ Base.append!(window::Window, scenes::AbstractVector{<:AbstractScene}) = append!(
 Base.push!(scene::AbstractScene, layers::AbstractLayer...) = push!(scene.layers, layers...)
 Base.pop!(scene::AbstractScene) = pop!(scene.layers)
 Base.append!(scene::AbstractScene, layers::AbstractVector{<:AbstractLayer}) = append!(scene.layers, layers)
-Base.push!(layer::Layer, objs...) = (push!(layer.objects, objs...); layer)
-Base.delete!(layer::Layer, obj) = (delete!(layer.objects, obj); layer)
+Base.push!(layer::AbstractLayer, objs...) = (push!(layer.objects, objs...); layer)
+Base.delete!(layer::AbstractLayer, obj) = (delete!(layer.objects, obj); layer)
 
 Base.getindex(layer::Layer, index) = getindex(layer.objects, index)
 
@@ -178,12 +181,12 @@ isalive(layer::Layer, obj) = (obj in layer.objects && !(obj in layer.dead_object
 """
 
 """
-add!(layer::Layer, objs...) = (push!(layer.new_objects, objs...); layer)
+add!(layer::AbstractLayer, objs...) = (push!(layer.new_objects, objs...); layer)
 
 """
 
 """
-function populate!(layer::Layer)
+function populate!(layer::AbstractLayer)
     union!(layer.objects, layer.new_objects)
     empty!(layer.new_objects)
     return layer
@@ -192,13 +195,13 @@ end
 """
 
 """
-kill!(layer::Layer, objs...) = (push!(layer.dead_objects, objs...); layer)
-killall!(layer::Layer) = (union!(layer.dead_objects, layer.objects); layer)
+kill!(layer::AbstractLayer, objs...) = (push!(layer.dead_objects, objs...); layer)
+killall!(layer::AbstractLayer) = (union!(layer.dead_objects, layer.objects); layer)
 
 """
 
 """
-function cleanup!(layer::Layer)
+function cleanup!(layer::AbstractLayer)
     setdiff!(layer.objects, layer.dead_objects)
     empty!(layer.dead_objects)
     return layer
