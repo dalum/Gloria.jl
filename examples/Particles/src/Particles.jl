@@ -1,11 +1,11 @@
 module Particles
 
-import Gloria: onevent!, render!, update!
+import Gloria: onevent!, render!, update!, after_update!
 using Gloria: Gloria, AbstractObject, AbstractShape, Audio, Event, Layer, Scene, Texture, Window,
     add!, kill!, play!,
     getmousestate, isalive, isbutton, iskey, ispressed, tocoordinates
 
-using Gloria.Shapes: Line, Point, circle, inside, intersects
+using Gloria.Shapes: Point, circle, inside, intersects, polygon, subdivide
 
 using Gloria.Physics
 
@@ -18,14 +18,14 @@ using Colors: RGB, @colorant_str
 mutable struct Controls <: AbstractObject end
 
 struct Floor <: AbstractObject end
-Physical{Floor}(y) = Physical(Floor(), Line(Point(-width/2, 0.), Point(width/2, 0.)), y=y, static=true)
+Physical{Floor}(y) = Physical(Floor(), (Point(-width/2, 0.), Point(width/2, 0.)), y=y, static=true)
 struct Wall <: AbstractObject end
-Physical{Wall}(x) = Physical(Wall(), Line(Point(0., -height/2), Point(0., height/2)), x=x, static=true)
+Physical{Wall}(x) = Physical(Wall(), polygon((Point(-50., -height/2), Point(-50., height/2), Point(50., height/2), Point(50., -height/2))), x=x, static=true)
 
 mutable struct Particle <: AbstractObject
     color::RGB
 end
-Physical{Particle}(color, x, y) = Physical(Particle(color), circle(Point(0., 0.), 50., samples=4, θ=0), x=x, y=y, m=50., I=5000.)
+Physical{Particle}(color, x, y, n=6) = Physical(Particle(color), subdivide(polygon([(r = 1randn(); Point((50+r)cos(2π*i/n), (50+r)sin(2π*i/n))) for i in 0:(n-1)]), 2), x=x, y=y, m=5., I=5000.)
 
 ##################################################
 # Events
@@ -47,7 +47,7 @@ end
 # Update
 ##################################################
 
-function update!(self::Physical{Particle}, ::Layer, t, dt)
+function after_update!(self::Physical{Particle}, ::Layer, t, dt)
     self.vy += 500.0*dt
 end
 

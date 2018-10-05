@@ -2,8 +2,10 @@ module Shapes
 
 using IterTools: partition
 using LinearAlgebra
+using StaticArrays
 
-export Point, Line, circle, polygon
+export AbstractShape, Point, Polyline,
+    circle, edges, polygon, rotate, translate, vertices
 
 const flatten = Iterators.flatten
 
@@ -25,31 +27,29 @@ Point((x, y)) = Point(promote(x, y)...)
 Base.convert(::Type{Point{T}}, p::Point{S}) where {T,S} = Point(convert(T, p.x), convert(T, p.y))
 Base.promote_rule(::Type{Point{T}}, ::Type{Point{S}}) where {T,S} = Point{promote_type(T, S)}
 
-struct Line{T} <: AbstractPrimitiveShape{T}
-    p0::Point{T}
-    p1::Point{T}
-end
-
-Base.convert(::Type{Line{T}}, l::Line{S}) where {T,S} = Line(convert(Point{T}, l.p0), convert(Point{T}, l.p1))
-
 ##################################################
 # Non–basic shapes
 ##################################################
 
-const NonPrimitiveShape{T} = Union{AbstractVector{<:AbstractPrimitiveShape{T}}, AbstractSet{<:AbstractPrimitiveShape{T}}, NTuple{<:Any, <:AbstractPrimitiveShape{T}}}
-const Points{T} = Union{AbstractVector{<:Point{T}}, AbstractSet{<:Point{T}}, NTuple{<:Any, <:Point{T}}}
-const Lines{T} = Union{AbstractVector{<:Line{T}}, AbstractSet{<:Line{T}}, NTuple{<:Any, <:Line{T}}}
+const Polyline{N,T} = NTuple{N, <:Point{T}}
 
-polyline(points) = [Line(p0, p1) for (p0, p1) in partition(points, 2, 1)]
-polygon(points) = polyline(flatten((points, first(points))))
-circle(c::Point, r::Real; samples=20, θ=0.) = polyline(Point(c.x + r*cos(2π*i/samples + θ*π/180), c.y + r*sin(2π*i/samples + θ*π/180)) for i in 0:samples)
+polygon(points) = Tuple(flatten((points, first(points))))
+circle(c::Point, r::Real; samples=20, θ=0.) = Tuple(Point(c.x + r*cosd(360*i/samples + θ), c.y + r*sind(360*i/samples + θ)) for i in 0:samples)
 
+const NonPrimitiveShape{T} = Union{Polyline{T}}
 const AbstractShape{T} = Union{AbstractPrimitiveShape{T}, NonPrimitiveShape{T}}
 
 Base.iterate(s::AbstractPrimitiveShape) = (s, nothing)
 Base.iterate(::AbstractPrimitiveShape, ::Nothing) = nothing
 Base.length(::AbstractPrimitiveShape) = 1
 Base.getindex(s::AbstractPrimitiveShape, x) = (s,)[x]
+
+ispolygon(s::AbstractShape) = first(s) === last(s)
+
+function subdivide(s::Polyline, samples=2)
+    points = flatten((p1 + i*(p2 - p1) / samples for i in 0:samples-1) for (p1, p2) in edges(s))
+    return Tuple(flatten((points, s[end])))
+end
 
 ##################################################
 # BoundingBox
@@ -68,19 +68,14 @@ BoundingBox(b1::BoundingBox, b2) = BoundingBox(
     min(b1.y1, b2.y1), max(b1.y2, b2.y2))
 
 Base.extrema(p::Point) = (p.x, p.x, p.y, p.y)
-Base.extrema(l::Line) = (min(l.p0.x, l.p1.x), max(l.p0.x, l.p1.x), min(l.p0.y, l.p1.y), max(l.p0.y, l.p1.y))
-
-BoundingBox(p::Point) = BoundingBox(extrema(p)...)
-BoundingBox(l::Line) = BoundingBox(extrema(l)...)
-BoundingBox(points::Points) = BoundingBox(extrema(p.x for p in points)..., extrema(p.y for p in points)...)
-function BoundingBox(s::NonPrimitiveShape)
+BoundingBox(p::Point) = BoundingBox(p.x, p.x, p.y, p.y)
+function BoundingBox(s::Polyline)
     x1, x2, y1, y2 = Inf, -Inf, Inf, -Inf
-    for ps in s
-        a, b, c, d = extrema(ps)
-        a < x1 && (x1 = a)
-        b > x2 && (x2 = b)
-        c < y1 && (y1 = c)
-        d > y2 && (y2 = d)
+    for p in s
+        p.x < x1 && (x1 = p.x)
+        p.x > x2 && (x2 = p.x)
+        p.y < y1 && (y1 = p.y)
+        p.y > y2 && (y2 = p.y)
     end
     return BoundingBox(x1, x2, y1, y2)
 end
@@ -104,9 +99,8 @@ LinearAlgebra.cross(n::Float64, p::Point) = Point(-n*p.y, p.x*n)
 LinearAlgebra.cross(p::Point, n::Float64) = Point(n*p.y, -p.x*n)
 LinearAlgebra.dot(p1::Point, p2::Point) = p1.x*p2.x + p1.y*p2.y
 LinearAlgebra.norm(p::Point) = sqrt(p.x*p.x + p.y*p.y)
-LinearAlgebra.norm(l::Line) = norm(l.p1 - l.p0)
 LinearAlgebra.normalize(p::Point) = (N = norm(p); Point(p.x/N, p.y/N))
-LinearAlgebra.normalize(l::Line) = normalize(l.p1 - l.p0)
+vector(l::Polyline{2}) = l[2] - l[1]
 
 Base.isapprox(p1::Point, p2::Point) = isapprox(p1.x, p2.x) && isapprox(p1.y, p2.y)
 
@@ -140,15 +134,13 @@ end
     vertices(shape)
 """
 vertices(p::Point) = (p,)
-vertices(l::Line) = (l.p0, l.p1)
-vertices(s::NonPrimitiveShape) = flatten(map(vertices, s))
+vertices(l::Polyline) = ispolygon(l) ? l[1:end-1] : l
 
 """
     edges(shape)
 """
 edges(p::Point) = ()
-edges(l::Line) = (l,)
-edges(s::NonPrimitiveShape) = flatten(map(edges, s))
+edges(l::Polyline) = partition(l, 2, 1)
 
 ##################################################
 # Distances
@@ -161,20 +153,19 @@ Return the projection of `point` onto `line`.  If the `point` is not
 normal to the `line`, return `nothing` instead.
 
 """
-function projection(l::Line, p::Point)
-    d = (l.p1 - l.p0)
-    a = (d ⋅ (p - l.p0)) / (d ⋅ d)
-    0 <= a <= 1 && return l.p0 + d * a
+function projection(l::Polyline{2}, p::Point)
+    @inbounds d = (l[2] - l[1])
+    @inbounds a = (d ⋅ (p - l[1])) / (d ⋅ d)
+    0 <= a <= 1 && return @inbounds l[1] + d * a
     return nothing
 end
 
-closestprojection(p1::Point, p2::Point) = p1
-closestprojection(l::Line, p::Point) = projection(l, p)
-function closestprojection(s::NonPrimitiveShape, p::Point)
+closestprojection(l::Polyline{2}, p::Point) = projection(l, p)
+function closestprojection(l::Polyline, p::Point)
     d = Inf
     pr = p
-    for ps in s
-        pr′ = closestprojection(ps, p)
+    for e in edges(l)
+        pr′ = projection(e, p)
         if pr′ !== nothing
             d′ = norm(p - pr′)
             if d′ < d
@@ -204,8 +195,7 @@ Transformation(c, s, x, y) = Transformation(promote(c, s, x, y)...)
     t1.x + t1.c*t2.x - t1.s*t2.y,
     t1.y + t1.s*t2.x + t1.c*t2.y)
 (t::Transformation)(p::Point) = Point(t.x + t.c*p.x- t.s*p.y, t.y + t.c*p.y + t.s*p.x)
-(t::Transformation)(l::Line) = Line(t(l.p0), t(l.p1))
-(t::Transformation)(s::NonPrimitiveShape) = map(t, s)
+(t::Transformation)(l::Polyline) = map(t, l)
 
 """
     translate(x, y)
@@ -222,12 +212,6 @@ translate(s::AbstractShape, x, y) = translate(x, y)(s)
 rotate(θ) = Transformation(cosd(θ), sind(θ), 0., 0.)
 rotate(s::AbstractShape, θ) = rotate(θ)(s)
 
-normal(l::Line) = normalize(rotate(90)(l))
-function normal(l::Line, p::Point)
-    n = normal(l)
-    return (p - l.p0) ⋅ n >= 0 ? n : -n
-end
-
 """
     extrude(transforms...)
 """
@@ -236,10 +220,8 @@ extrude(transform) = s -> extrude(s, transform)
 """
     extrude(shape, transforms...)
 """
-extrude(p::Point, transform) = Line(p, transform(p))
-extrude(ps::Points, transform) = map(extrude(transform), ps)
-extrude(s::Union{Line, NonPrimitiveShape}, transform) =
-    reduce(vcat, (s, transform(s), extrude(collect(vertices(s)), transform)))
+extrude(p::Point, transform) = (p, transform(p))
+extrude(l::Polyline{2}, transform) = Tuple(flatten((l, reverse(transform(l)), l[1])))
 
 """
     trace(shape, line)
@@ -248,25 +230,30 @@ Return an unsorted vector of parameters, corresponding to each
 intersection of `line` with `shape`.
 
 """
-function trace(p::Point, l::Line)
-    d = (l.p1 - l.p0) × (p - l.p0)
+trace(s::Polyline{1}, l::Polyline{2}) = trace(s[1], l)
+function trace(p::Point, l::Polyline{2})
+    @inbounds b = (l[2] - l[1])
+    @inbounds c = (p - l[1])
     # If `d` is zero, the point is in the line.
-    if iszero(d)
+    if iszero(b × c)
         # We project `p` onto `l`,
-        a = ((p - l.p0) ⋅ (l.p1 - l.p0)) / ((l.p1 - l.p0) ⋅ (l.p1 - l.p0))
+        @inbounds a = (c ⋅ b) / (b ⋅ b)
         # and check if it is outside the bounds:
-        (a < 0 || 1 <= a || isnan(a)) && return ()
+        (a <= 0 || 1 <= a || isnan(a)) && return ()
         # otherwise, we have a match!
         return (a,)
     end
     return ()
 end
 
-function trace(l1::Line, l2::Line)
-    d = (l1.p1 - l1.p0) × (l2.p1 - l2.p0)
+function trace(l1::Polyline{2}, l2::Polyline{2})
+    @inbounds b = (l1[2] - l1[1])
+    @inbounds c = (l2[2] - l2[1])
+    @inbounds k = (l2[1] - l1[1])
+    d = b × c
     # `t1/d` and `t2/d` are the parameters for the intersection point
     # using `l1` or `l2` respectively.  `t2` is defined a little later.
-    t1 = (l2.p0 - l1.p0) × (l2.p1 - l2.p0)
+    t1 = k × c
 
     # For parallel (or anti–parallel) lines, `d` is zero.
     if iszero(d)
@@ -274,79 +261,33 @@ function trace(l1::Line, l2::Line)
         if iszero(t1)
             # In this case, we trace the vertices of `l1` by
             # projecting them onto `l2`:
-            v1, v2 = vertices(l1)
-            a1 = ((v1 - l2.p0) ⋅ (l2.p1 - l2.p0)) / ((l2.p1 - l2.p0) ⋅ (l2.p1 - l2.p0))
-            a2 = ((v2 - l2.p0) ⋅ (l2.p1 - l2.p0)) / ((l2.p1 - l2.p0) ⋅ (l2.p1 - l2.p0))
+            @inbounds v1, v2 = vertices(l1)
+            n = (c ⋅ c)
+            @inbounds a1 = ((v1 - l2[1]) ⋅ c) / n
+            @inbounds a2 = ((v2 - l2[1]) ⋅ c) / n
             amin, amax = min(a1, a2), max(a1, a2)
             # In the 1D projection, we check if there is no overlap,
-            (amax < 0 || 1 <= amin || isnan(amin) || isnan(amax)) && return ()
+            (amax <= 0 || 1 <= amin || isnan(amin) || isnan(amax)) && return ()
             # in which case we return the parameters corresponding to
-            # the line segment of the overlap:
-            return (max(amin, 0), min(amax, 1))
+            # the interval of  overlap of the line segments:
+            return (max(amin, 0.), min(amax, 1.))
         end
         # If the lines do not line up, then they do not intersect.
         return ()
     end
 
-    t2 = (l2.p0 - l1.p0) × (l1.p1 - l1.p0)
+    t2 = k × b
 
     # For non–parallel lines, we check if the parameter `t1/d` is in
     # `l1`, and return `t2` if it is on `l2` (TODO: include simple
-    # proof why this works).  See above for the definition of the
-    # operator `⋖` (`\lessdot`).
-    if 0 <= t1/d < 1 && 0 <= t2/d < 1
+    # proof why this works).
+    if 0 <= t1/d <= 1 && 0 <= t2/d <= 1
         return (t2/d,)
     end
     return ()
 end
 
-trace(l::Line) = s -> trace(s, l)
-trace(s::NonPrimitiveShape, l::Line) = flatten(map(trace(l), s))
-
-"""
-    trace(shape, lines)
-
-Like `trace(shape, ::Line)`, except this will return the parameters
-for all lines, combined.
-
-This function is mostly useful when used in combination with
-`extrude(vertices(...))` to find the distances between shapes along an
-axis.
-
-"""
-function trace(s::AbstractShape, ls::Lines)
-    !intersects(BoundingBox(s), BoundingBox(ls)) && return ()
-    return flatten(trace(s, l) for l in ls)
-end
-
-"""
-    tracepoint(shape, line)
-"""
-function tracepoint(s::AbstractShape, l::Line)
-    return ((t, l.p0 + (l.p1 - l.p0)*t) for t in trace(s, l))
-end
-
-function tracepoint(s::AbstractShape, ls::Lines)
-    !intersects(BoundingBox(s), BoundingBox(ls)) && return ()
-    return flatten(tracepoint(s, l) for l in ls)
-end
-
-tracepointnormal(p::Point, l::Line) = ((t, l.p0 + (l.p1 - l.p0)*t, normal(l, p)) for t in trace(p, l))
-function tracepointnormal(l1::Line, l2::Line)
-    n = normal(l1, l2.p0)
-    return ((t, l2.p0 + (l2.p1 - l2.p0)*t, n) for t in trace(l1, l2))
-end
-tracepointnormal(s::NonPrimitiveShape, l::Line) = flatten(map(ps -> tracepointnormal(ps, l), s))
-
-function tracepointnormal(s::AbstractShape, ls::Lines)
-    !intersects(BoundingBox(s), BoundingBox(ls)) && return ()
-    return flatten(tracepointnormal(s, l) for l in ls)
-end
-
-"""
-    intersects(shape)
-"""
-intersects(s2::AbstractShape) = (s1) -> intersects(s1, s2)
+trace(s::Polyline, l::Polyline{2}) = flatten(map(e -> trace(e, l), edges(s)))
 
 """
     intersects(shape1, shape2)
@@ -354,46 +295,51 @@ intersects(s2::AbstractShape) = (s1) -> intersects(s1, s2)
 intersects(p1::Point, p2::Point) = p1 == p2
 
 # See `trace` above for detailed comments of the code.
-function intersects(p::Point, l::Line)
-    d = (l.p1 - l.p0) × (p - l.p0)
-    if iszero(d)
-        a = ((p - l.p0) ⋅ (l.p1 - l.p0)) / ((l.p1 - l.p0) ⋅ (l.p1 - l.p0))
-        (a < 0 || 1 <= a || isnan(a)) && return false
+function intersects(p::Point, l::Polyline{2})
+    @inbounds b = (l[2] - l[1])
+    @inbounds c = (p - l[1])
+    if iszero(b × c)
+        @inbounds a = (c ⋅ b) / (b ⋅ b)
+        (a <= 0 || 1 <= a || isnan(a)) && return false
         return true
     end
     return false
 end
-intersects(l::Line, p::Point) = intersects(p, l)
+intersects(l::Polyline{2}, p::Point) = intersects(p, l)
 
 # See `trace` above for detailed comments of the code.
-function intersects(l1::Line, l2::Line)
-    d = (l1.p1 - l1.p0) × (l2.p1 - l2.p0)
-    t1 = (l2.p0 - l1.p0) × (l2.p1 - l2.p0)
+function intersects(l1::Polyline{2}, l2::Polyline{2})
+    @inbounds b = (l1[2] - l1[1])
+    @inbounds c = (l2[2] - l2[1])
+    @inbounds k = (l2[1] - l1[1])
+    d = b × c
+    t1 = k × c
+
     if iszero(d)
         if iszero(t1)
-            v1, v2 = vertices(l1)
-            a1 = ((v1 - l2.p0) ⋅ (l2.p1 - l2.p0)) / ((l2.p1 - l2.p0) ⋅ (l2.p1 - l2.p0))
-            a2 = ((v2 - l2.p0) ⋅ (l2.p1 - l2.p0)) / ((l2.p1 - l2.p0) ⋅ (l2.p1 - l2.p0))
+            @inbounds v1, v2 = vertices(l1)
+            n = (c ⋅ c)
+            @inbounds a1 = ((v1 - l2[1]) ⋅ c) / n
+            @inbounds a2 = ((v2 - l2[1]) ⋅ c) / n
             amin, amax = min(a1, a2), max(a1, a2)
-            (amax < 0 || 1 <= amin || isnan(amax) || isnan(amin)) && return false
+            (amax < 0 || 1 <= amin || isnan(amin) || isnan(amax)) && return false
             return true
         end
         return false
     end
-    t2 = (l2.p0 - l1.p0) × (l1.p1 - l1.p0)
-    if 0 <= t1/d < 1 && 0 <= t2/d < 1
+    t2 = k × b
+    if 0 <= t1/d <= 1 && 0 <= t2/d <= 1
         return true
     end
     return false
 end
 
-intersects(s1::NonPrimitiveShape, s2::AbstractPrimitiveShape) =
-    any(intersects(s2, ps) for ps in s1)
-intersects(s2::AbstractPrimitiveShape, s1::NonPrimitiveShape) = intersects(s1, s2)
+intersects(s1::AbstractShape, s2::Union{Point, Polyline{1}, Polyline{2}}) = any(intersects(e, s2) for e in edges(s1))
+intersects(s1::Union{Point, Polyline{1}, Polyline{2}}, s2::AbstractShape) = intersects(s2, s1)
 
-function intersects(s1::NonPrimitiveShape, s2::NonPrimitiveShape)
+function intersects(s1::AbstractShape, s2::AbstractShape)
     !intersects(BoundingBox(s1), BoundingBox(s2)) && return false
-    return any(intersects(ps1, ps2) for ps1 in s1, ps2 in s2)
+    return any(intersects(e1, e2) for e1 in edges(s1), e2 in edges(s2))
 end
 
 """
@@ -408,8 +354,29 @@ at an angle `θ`.  A shape is determined to be inside if either:
    `shape1` an odd number of times.
 
 """
-inside(p1::Point, p2::Point, θ) = intersects(p1, Line(p2, p2 + Point(cosd(θ)*1e6, sind(θ)*1e6)))
-inside(l::Line, p::Point, θ) = intersects(l, Line(p, p + Point(cosd(θ)*1e6, sind(θ)*1e6)))
-inside(s::NonPrimitiveShape, p::Point, θ) = isodd(count(q -> inside(q, p, θ), edges(s)))
+inside(p1::Point, p2::Point, θ) = intersects(p1, (p2, p2 + Point(cosd(θ)*1e6, sind(θ)*1e6)))
+function inside(l::Polyline, p::Point, θ)
+    ray = (p, p + Point(cosd(θ)*1e6, sind(θ)*1e6))
+    n = count(edges(l)) do e
+        if intersects(e, ray)
+            i1 = intersects(e[1], ray)
+            i2 = intersects(e[2], ray)
+            # Intersecting both end points counts as a double
+            # intersection.
+            i1 && i2 && return false
+            # Not intersecting either end point is a valid
+            # intersection.
+            !(i1 || i2) && return true
+            # Intersecting one vertex only counts if the the other
+            # vertex of the edge lies clockwise w.r.t. to the ray.
+            # This overcomes the issue of tracing corners
+            d = ray[2] - ray[1]
+            (i1 && d × (e[2] - ray[1]) >= 0) && return true
+            (i2 && d × (e[1] - ray[1]) >= 0) && return true
+        end
+        return false
+    end
+    return isodd(n)
+end
 
 end #module

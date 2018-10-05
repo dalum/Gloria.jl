@@ -30,8 +30,8 @@ include("mouse.jl")
 include("keyboard.jl")
 include("audio.jl")
 
-using .Shapes: AbstractShape, Line, NonPrimitiveShape, Point,
-    rotate, translate
+using .Shapes
+using .Shapes: rotate, translate
 
 include("graphics.jl")
 

@@ -105,25 +105,19 @@ function render!(window::Window, p::Point, x, y, θ = 0.0; scale = 1.0, color)
     drawpoint!(window, round(Int, x + p.x), round(Int, y + p.y))
 end
 
-function render!(window::Window, l::Line, x, y, θ = 0.0; scale = 1.0, color)
+function render!(window::Window, l::Polyline, x, y, θ = 0.0; scale = 1.0, color)
     setcolor!(window, color)
-    l = l |> rotate(θ) |> translate(x, y)
-    x1 = l.p0.x*scale
-    x2 = l.p1.x*scale
-    y1 = l.p0.y*scale
-    y2 = l.p1.y*scale
-    try
-        drawline!(window, round(Int, x1), round(Int, y1), round(Int, x2), round(Int, y2))
-    catch e
-        println(l)
+    for e in edges(l |> rotate(θ) |> translate(x, y))
+        @inbounds x1 = e[1].x*scale
+        @inbounds x2 = e[2].x*scale
+        @inbounds y1 = e[1].y*scale
+        @inbounds y2 = e[2].y*scale
+        try
+            drawline!(window, round(Int, x1), round(Int, y1), round(Int, x2), round(Int, y2))
+        catch e
+            println(l, x, y, θ)
+        end
     end
-end
-
-function render!(window::Window, shape::NonPrimitiveShape, x, y, θ = 0.0; scale = 1.0, color)
-    for s in shape
-        render!(window, s, x, y, θ, scale=scale, color=color)
-    end
-    return window
 end
 
 function render!(window::Window, layer::AbstractLayer, r::RenderTask{<:AbstractShape})

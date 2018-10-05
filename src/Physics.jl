@@ -6,27 +6,27 @@ using LinearAlgebra
 
 using Gloria: AbstractObject, AbstractLayer, AbstractScene, RenderTask,
     add!, kill!, populate!
-using ..Shapes: AbstractShape, Line, NonPrimitiveShape, Point,
-    closestprojection, extrude, rotate, trace, tracepoint, tracepointnormal, translate, vertices
+using ..Shapes: AbstractShape, BoundingBox, Point,
+    closestprojection, edges, extrude, rotate, trace, translate, vertices
 
 export CollisionLayer, Physical,
     collide!, oncollision!, timeintersects
 
 import Gloria: after_update!, before_update!, render!, update!, visible
-import ..Shapes: inside, intersects
+import ..Shapes: inside, intersects, subdivide
 
 const flatten = Iterators.flatten
 
 const COLLISION_TIME_OFFSET = 1e-5
 const MAX_COLLISION_DEPTH = 500
 
-const Vec{T} = Point{T}
-
 abstract type AbstractPhysicalState end
 
 mutable struct PhysicalState{T} <: AbstractPhysicalState
     t::T
     static::Bool
+    awake::Bool
+    ncontacts::Int
     m::T
     I::T
     x::T
@@ -37,11 +37,13 @@ mutable struct PhysicalState{T} <: AbstractPhysicalState
     ω::T
 end
 PhysicalState(static::Bool, m, I, x, y, θ, vx, vy, ω) =
-    PhysicalState(0., static, m, I, x, y, θ, vx, vy, ω)
+    PhysicalState(0., static, true, 0, m, I, x, y, θ, vx, vy, ω)
 
 Base.copy(state::PhysicalState) = PhysicalState(
     state.t,
     state.static,
+    state.awake,
+    state.ncontacts,
     state.m,
     state.I,
     state.x,
@@ -68,7 +70,7 @@ function Physical(wrapped, shape, state::PhysicalState)
     return self
 end
 Physical(wrapped, shape, static, m, I, x, y, θ, vx, vy, ω) =
-    Physical(wrapped, shape, PhysicalState(0., static, convert.(Float64, (m, I, x, y, θ, vx, vy, ω))...))
+    Physical(wrapped, shape, PhysicalState(static, convert.(Float64, (m, I, x, y, θ, vx, vy, ω))...))
 Physical(wrapped, shape; static=false, m=1., I=1., x=0., y=0., θ=0., vx=0., vy=0., ω=0.) =
     Physical(wrapped, shape, static, m, I, x, y, θ, vx, vy, ω)
 
@@ -80,7 +82,7 @@ Physical(wrapped, shape; static=false, m=1., I=1., x=0., y=0., θ=0., vx=0., vy=
 for v in [:(:wrapped), :(:shape), :(:state_history)]
     @eval @inline _getproperty(obj::Physical, ::Val{$v}) = Core.getfield(obj, $v)
 end
-for v in [:(:static), :(:m), :(:I), :(:x), :(:y), :(:θ), :(:vx), :(:vy), :(:ω)]
+for v in [:(:static), :(:awake), :(:ncontacts), :(:m), :(:I), :(:x), :(:y), :(:θ), :(:vx), :(:vy), :(:ω)]
     @eval @inline _getproperty(obj::Physical, ::Val{$v}) = Core.getfield(currentstate(obj), $v)
 end
 
@@ -89,7 +91,7 @@ end
 for v in [:(:wrapped), :(:shape), :(:state_history)]
     @eval @inline _setproperty!(obj::Physical, ::Val{$v}, x) = Core.setfield!(obj, $v, x)
 end
-for v in [:(:static)]
+for v in [:(:static), :(:awake), :(:ncontacts)]
     @eval @inline _setproperty!(obj::Physical, ::Val{$v}, x) = Core.setfield!(currentstate(obj), $v, x)
 end
 for v in [:(:m), :(:I), :(:x), :(:y), :(:θ), :(:vx), :(:vy), :(:ω)]
@@ -105,8 +107,8 @@ wrapped(obj::Physical) = obj.wrapped
 isstatic(obj::Physical) = obj.static
 
 mass(obj::Union{Physical,PhysicalState}) = obj.m
-position(obj::Union{Physical,PhysicalState}) = Vec(obj.x, obj.y)
-velocity(obj::Union{Physical,PhysicalState}) = Vec(obj.vx, obj.vy)
+position(obj::Union{Physical,PhysicalState}) = Point(obj.x, obj.y)
+velocity(obj::Union{Physical,PhysicalState}) = Point(obj.vx, obj.vy)
 angularmass(obj::Union{Physical,PhysicalState}) = obj.I
 angle(obj::Union{Physical,PhysicalState}) = obj.θ
 angularvelocity(obj::Union{Physical,PhysicalState}) = obj.ω
@@ -115,7 +117,7 @@ setmass!(obj::Union{Physical,PhysicalState}, m) = (obj.m = m; obj)
 setposition!(obj::Union{Physical,PhysicalState}, x, y) = (obj.x = x; obj.y = y; obj)
 setvelocity!(obj::Union{Physical,PhysicalState}, vx, vy) = (obj.vx = vx; obj.vy = vy; obj)
 setposition!(obj::Union{Physical,PhysicalState}, p::Point) = (obj.x = p.x; obj.y = p.y; obj)
-setvelocity!(obj::Union{Physical,PhysicalState}, v::Vec) = (obj.vx = v.x; obj.vy = v.y; obj)
+setvelocity!(obj::Union{Physical,PhysicalState}, v::Point) = (obj.vx = v.x; obj.vy = v.y; obj)
 setangularmass!(obj::Union{Physical,PhysicalState}, I) = (obj.I = I; obj)
 setangle!(obj::Union{Physical,PhysicalState}, θ) = (obj.θ = θ; obj)
 setangularvelocity!(obj::Union{Physical,PhysicalState}, ω) = (obj.ω = ω; obj)
@@ -133,16 +135,14 @@ rotate!(obj::Union{Physical,PhysicalState}, θ′) = setangle!(obj, angle(obj) +
 Apply to `obj` an `impulse` at `point`.
 
 """
-function applyimpulse!(obj::Union{Physical,PhysicalState}, j::Vec, p::Point)
-    v = velocity(obj)
-    ω = angularvelocity(obj)
+function applyimpulse!(obj::Union{Physical,PhysicalState}, j::Point, p::Point)
     m = mass(obj)
     I = angularmass(obj)
     r = p - position(obj)
-    v += j / m
-    ω += (r × j)/I
-    setvelocity!(obj, v)
-    setangularvelocity!(obj, ω)
+
+    obj.vx += j.x/m
+    obj.vy += j.y/m
+    obj.ω += (r × j)/I
 end
 
 momentum(obj::Union{Physical,PhysicalState}) = mass(obj).*velocity(obj)
@@ -206,17 +206,6 @@ function timetrace(shape1::AbstractShape, shape2::AbstractShape, (state1, prevst
     return (dt * (t - 1.) for t in ts)
 end
 
-function timetracepoint(shape1::AbstractShape, shape2::AbstractShape, (state1, prevstate1)::Tuple{PhysicalState, PhysicalState}, (state2, prevstate2)::Tuple{PhysicalState, PhysicalState})
-    dt = state1.t - prevstate1.t
-    tps = tracepoint(timecapture(shape1, shape2, (state1, prevstate1), (state2, prevstate2))...)
-    return ((dt * (t - 1.), p) for (t, p) in tps)
-end
-
-function timetracepointnormal(shape1::AbstractShape, shape2::AbstractShape, (state1, prevstate1)::Tuple{PhysicalState, PhysicalState}, (state2, prevstate2)::Tuple{PhysicalState, PhysicalState})
-    dt = state1.t - prevstate1.t
-    return ((dt * (t - 1.), p, n) for (t, p, n) in tracepointnormal(timecapture(shape1, shape2, (state1, prevstate1), (state2, prevstate2))...))
-end
-
 function timecapture(obj1::Physical, obj2::Physical)
     state1, state2 = currentstate(obj1), currentstate(obj2)
     prevstate1, prevstate2 = obj1.state_history[end-1], obj2.state_history[end-1]
@@ -227,18 +216,6 @@ function timetrace(obj1::Physical, obj2::Physical)
     state1, state2 = currentstate(obj1), currentstate(obj2)
     prevstate1, prevstate2 = obj1.state_history[end-1], obj2.state_history[end-1]
     return timetrace(obj1.shape, obj2.shape, (state1, prevstate1), (state2, prevstate2))
-end
-
-function timetracepoint(obj1::Physical, obj2::Physical)
-    state1, state2 = currentstate(obj1), currentstate(obj2)
-    prevstate1, prevstate2 = obj1.state_history[end-1], obj2.state_history[end-1]
-    return timetracepoint(obj1.shape, obj2.shape, (state1, prevstate1), (state2, prevstate2))
-end
-
-function timetracepointnormal(obj1::Physical, obj2::Physical)
-    state1, state2 = currentstate(obj1), currentstate(obj2)
-    prevstate1, prevstate2 = obj1.state_history[end-1], obj2.state_history[end-1]
-    return timetracepointnormal(obj1.shape, obj2.shape, (state1, prevstate1), (state2, prevstate2))
 end
 
 timeintersects(obj1::Physical, obj2::Physical) =
@@ -265,24 +242,19 @@ end
 
 position(h::AbstractHinge) = h.p |> rotate(h.obj.θ) |> translate(h.obj.x, h.obj.y)
 previousposition(h::AbstractHinge) = h.p |> rotate(previousstate(h.obj).θ) |> translate(previousstate(h.obj).x, previousstate(h.obj).y)
-angle(v::Vec) = 180*atan(v.y, v.x)/π
-function impulse(s::AbstractSpring, dt)
-    d = position(s.hinge1) - position(s.hinge2)
-    d1 = previousposition(s.hinge1) - previousposition(s.hinge2)
-    nd = norm(d)
-    return iszero(nd) ? Point(0.0, 0.0) : (-s.k + s.kd*(((d - d1)/dt) ⋅ d)/nd^2)*d*dt
-end
+angle(v::Point) = 180*atan(v.y, v.x)/π
 
 ##################################################
 # Collisions
 ##################################################
 
-struct Collision{T1 <: Physical, T2 <: Physical, T}
+struct Collision{T1<:Physical, T2<:Physical, T} <: AbstractPhysicalObject
+    t::Float64
     obj1::T1
     obj2::T2
-    t::Float64
     p1::Point{T}
     p2::Point{T}
+    CR::Float64
 end
 Base.:(==)(col1::Collision, col2::Collision) =
     col1.t == col2.t && col1.p1 == col2.p1 && col1.p2 == col2.p2 &&
@@ -301,13 +273,26 @@ update step between objects in `layer1` and `layer2`
 
 """
 function collisions(layer1::AbstractLayer, layer2::AbstractLayer, t::Float64, dt::Float64)
+    # TODO: broad phase / narrow phase separation
     cs = Collision[]
     for obj1 in layer1.objects, obj2 in layer2.objects
         (obj1 === obj2 || isstatic(obj1) && isstatic(obj2)) && continue
-        for p1 in unique!(collect(vertices(shape(obj1))))
-            if inside(shape(obj2), p1, 270.009)
-                p2 = closestprojection(shape(obj2), p1)
-                push!(cs, Collision(obj1, obj2, t, p1, p2))
+        shape1 = shape(obj1)
+        shape2 = shape(obj2)
+        !intersects(BoundingBox(shape1), BoundingBox(shape2)) && continue
+        # !!!TODO: Separating Axis Theorem!!!
+        for p1 in vertices(shape1)
+            if inside(shape2, p1, 270)
+                p2 = closestprojection(shape2, p1)
+                if p2 !== nothing
+                    push!(cs, Collision(t, obj1, obj2, p1, p2, 0.65))
+                end
+            end
+        end
+        for e1 in edges(shape1), e2 in edges(shape2)
+            for a in trace(e2, e1)
+                p1 = e1[1] + (e1[2] - e1[1]) * a
+                push!(cs, Collision(t, obj1, obj2, p, p, 0.65))
             end
         end
     end
@@ -315,12 +300,12 @@ function collisions(layer1::AbstractLayer, layer2::AbstractLayer, t::Float64, dt
 end
 
 ##################################################
-# Collision penalty model
+# Collision model
 ##################################################
 
 struct CollisionLayer{T1 <: AbstractLayer, T2 <: AbstractLayer} <: AbstractLayer{AbstractPhysicalObject}
-    layer1::T1
-    layer2::T2
+    source_layer::T1
+    destination_layer::T2
     objects::OrderedSet{AbstractPhysicalObject}
     x::Float64
     y::Float64
@@ -331,55 +316,122 @@ struct CollisionLayer{T1 <: AbstractLayer, T2 <: AbstractLayer} <: AbstractLayer
     new_objects::OrderedSet{AbstractPhysicalObject}
     dead_objects::Set{AbstractPhysicalObject}
 
-    function CollisionLayer(layer1::T1, layer2::T2, x = 0.0, y = 0.0, θ = 0.0; show = false, scale = 1.0) where {T1<:AbstractLayer,T2<:AbstractLayer}
+    function CollisionLayer(source_layer::T1, destination_layer::T2, x = 0.0, y = 0.0, θ = 0.0; show = false, scale = 1.0) where {T1<:AbstractLayer,T2<:AbstractLayer}
         return new{T1,T2}(
-            layer1, layer2, OrderedSet{AbstractPhysicalObject}(), x, y, θ, scale, show,
+            source_layer, destination_layer, OrderedSet{AbstractPhysicalObject}(), x, y, θ, scale, show,
             RenderTask[], OrderedSet{AbstractPhysicalObject}(), Set{AbstractPhysicalObject}())
     end
 end
 
 visible(layer::CollisionLayer) = layer.show
 
-struct CollisionPenaltySpring{T} <: AbstractSpring{T}
-    hinge1::Hinge{T}
-    hinge2::Hinge{T}
-    k::T
-    kd::T
-    l0::T
-    t::Float64
-    lifetime::Float64
-end
-
-function render!(layer::CollisionLayer, self::CollisionPenaltySpring, frame::Int, fps::Float64)
-    p1 = position(self.hinge1)
-    p2 = position(self.hinge2)
-    render!(layer, Line(p1, p2), 0., 0., 0., color=colorant"#0F0")
-end
-
 function before_update!(layer::CollisionLayer, ::AbstractScene, t::Float64, dt::Float64)
+    for c in collisions(layer.source_layer, layer.destination_layer, t, dt)
+        add!(layer, c)
+    end
     populate!(layer)
     for obj in layer.objects
         before_update!(obj, layer, t, dt)
     end
-    for c in collisions(layer.layer1, layer.layer2, t, dt)
-        # println(c)
-        # println("$(c.p1), $(c.p2)")
-        add!(layer, CollisionPenaltySpring(
-            Hinge(c.obj1, tocoordinates(c.obj1, c.p1)),
-            Hinge(c.obj2, tocoordinates(c.obj2, c.p2)),
-            10000., -100., 0., t, 0.01))
-    end
     return layer
+    # # Solve constraints (first pass)
+
+    # # Find all collisions
+    # cs = collisions(layer.source_layer, layer.destination_layer, t, dt)
+    # # ...
+
+    # # Solve collision positions
+    # solvepositions!(cs)
+
+    # # Solve constrants (second pass)
+
+    # # Solve velocities
+    # solvevelocities!(cs)
 end
 
-function update!(self::CollisionPenaltySpring, layer::AbstractLayer, t::Float64, dt::Float64)
-    j = impulse(self, dt)
-    r = min(norm(j), 3000.) / norm(j)
-    applyimpulse!(self.hinge1.obj, j*r, position(self.hinge1))
-    applyimpulse!(self.hinge2.obj, -j*r, position(self.hinge2))
-    if t > self.t + self.lifetime
-        kill!(layer, self)
+function before_update!(self::Collision, ::AbstractLayer, t::Float64, dt::Float64)
+    self.obj1.ncontacts += 1
+    self.obj2.ncontacts += 1
+end
+
+function update!(self::Collision, ::AbstractLayer, t::Float64, dt::Float64)
+    m1, m2 = isstatic(self.obj1) ? Inf : mass(self.obj1), isstatic(self.obj2) ? Inf : mass(self.obj2)
+    I1, I2 = isstatic(self.obj1) ? Inf : angularmass(self.obj1), isstatic(self.obj2) ? Inf : angularmass(self.obj2)
+    p1, p2 = position(self.obj1), position(self.obj2)
+    θ1, θ2 = angle(self.obj1), angle(self.obj2)
+    v1, v2 = velocity(self.obj1), velocity(self.obj2)
+    ω1, ω2 = angularvelocity(self.obj1), angularvelocity(self.obj2)
+
+    r1 = self.p1 - p1
+    r2 = self.p2 - p2
+    Δv = (v1 + ω1 × r1*pi/180) - (v2 + ω2 × r2*pi/180)
+
+    d = norm(self.p2 - self.p1)
+    n = normalize(self.p2 - self.p1)
+    j = -(1 + self.CR) * (Δv ⋅ n)
+    A1 = r1 × n
+    A2 = r2 × n
+    f = 1 / (inv(m1) + inv(m2) + inv(I1)*A1^2 + inv(I2)*A2^2)
+    fm = 1 / (inv(m1) + inv(m2))
+
+    ρ = 0.85
+    if j >= 0
+        setposition!(self.obj1, p1 + f/m1*n*d*ρ)
+        setposition!(self.obj2, p2 - f/m2*n*d*ρ)
+        setangle!(self.obj1, θ1 + f/I1*A1*180/pi*d*ρ)
+        setangle!(self.obj2, θ2 - f/I2*A2*180/pi*d*ρ)
+        setangularvelocity!(self.obj1, ω1 + j*f*A1/I1*180/pi)
+        setangularvelocity!(self.obj2, ω2 - j*f*A2/I2*180/pi)
+        setvelocity!(self.obj1, v1 + j*f/m1*n)
+        setvelocity!(self.obj2, v2 - j*f/m2*n)
+        # setvelocity!(self.obj1, 0v1)
+        # setvelocity!(self.obj2, 0v2)
     end
 end
+
+function after_update!(self::Collision, layer::AbstractLayer, t::Float64, dt::Float64)
+    self.obj1.ncontacts -= 1
+    self.obj2.ncontacts -= 1
+    kill!(layer, self)
+end
+
+# add!(layer, CollisionPenaltySpring(
+#     Hinge(c.obj1, tocoordinates(c.obj1, c.p1)),
+#     Hinge(c.obj2, tocoordinates(c.obj2, c.p2)),
+#     10000., 100000., t, 0.01))
+
+# struct CollisionPenaltySpring{T} <: AbstractSpring{T}
+#     hinge1::Hinge{T}
+#     hinge2::Hinge{T}
+#     k::T
+#     kd::T
+#     t::Float64
+#     lifetime::Float64
+# end
+
+# function render!(layer::CollisionLayer, self::CollisionPenaltySpring, frame::Int, fps::Float64)
+#     p1 = position(self.hinge1)
+#     p2 = position(self.hinge2)
+#     render!(layer, (p1, p2), 0., 0., 0., color=colorant"#0F0")
+# end
+
+# function update!(self::CollisionPenaltySpring, layer::AbstractLayer, t::Float64, dt::Float64)
+#     if t > self.t + self.lifetime
+#         kill!(layer, self)
+#     end
+
+#     d = position(self.hinge1) - position(self.hinge2)
+#     n = norm(d)
+#     d1 = previousposition(self.hinge1) - previousposition(self.hinge2)
+
+#     v = (1 - (d1 ⋅ d))/dt/n^2
+#     ds = t < self.t + self.lifetime ? dt + self.t + self.lifetime - t : dt
+#     j = (iszero(n) || iszero(dt)) ? Point(0.0, 0.0) : -(self.k + (self.kd/self.k)*v)*d*ds
+#     n = norm(j)
+#     r = iszero(n) ? 0. : min(n, 1000dt/self.lifetime)/n
+
+#     applyimpulse!(self.hinge1.obj, j*r, position(self.hinge1))
+#     applyimpulse!(self.hinge2.obj, -j*r, position(self.hinge2))
+# end
 
 end #module

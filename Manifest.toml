@@ -15,9 +15,9 @@ version = "0.8.10"
 
 [[BinaryProvider]]
 deps = ["Libdl", "Pkg", "SHA", "Test"]
-git-tree-sha1 = "b530fbeb6f41ab5a83fbe3db1fcbe879334bcd2d"
+git-tree-sha1 = "48c147e63431adbcee69bc40b04c3f0fec0a4982"
 uuid = "b99e7846-7c00-51b0-8f62-c81ae34c0232"
-version = "0.4.2"
+version = "0.5.0"
 
 [[BufferedStreams]]
 deps = ["Compat", "Pkg", "Test"]
@@ -33,9 +33,9 @@ version = "0.5.6"
 
 [[ColorTypes]]
 deps = ["FixedPointNumbers", "Random", "Test"]
-git-tree-sha1 = "0e3209ba7418aed732e5c3818076b4400ee36c08"
+git-tree-sha1 = "f73b0e10f2a5756de7019818a41654686da06b09"
 uuid = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
-version = "0.7.4"
+version = "0.7.5"
 
 [[Colors]]
 deps = ["ColorTypes", "FixedPointNumbers", "InteractiveUtils", "Pkg", "Printf", "Reexport", "Test"]
@@ -50,10 +50,10 @@ uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
 version = "1.1.0"
 
 [[DataStructures]]
-deps = ["InteractiveUtils", "REPL", "Random", "Serialization", "Test"]
-git-tree-sha1 = "5162c360c52e9265e0bfafb71415c31f746f7e04"
+deps = ["InteractiveUtils", "OrderedCollections", "REPL", "Random", "Serialization", "Test"]
+git-tree-sha1 = "8fc6e166e24fda04b2b648d4260cdad241788c54"
 uuid = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
-version = "0.12.0"
+version = "0.14.0"
 
 [[Dates]]
 deps = ["Printf"]
@@ -161,10 +161,10 @@ uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 version = "0.3.2"
 
 [[OrderedCollections]]
-deps = ["Random", "Serialization", "Test"]
-git-tree-sha1 = "cc23c786049328c93138da14e7020a464d707a23"
+deps = ["Pkg", "Random", "Serialization", "Test"]
+git-tree-sha1 = "41da1edba028376b58520ca01d9a41e29f855d55"
 uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
-version = "0.1.0"
+version = "1.0.1"
 
 [[Pkg]]
 deps = ["Dates", "LibGit2", "Markdown", "Printf", "REPL", "Random", "SHA", "UUIDs"]
@@ -190,9 +190,9 @@ version = "0.2.0"
 
 [[Revise]]
 deps = ["Distributed", "FileWatching", "InteractiveUtils", "LibGit2", "OrderedCollections", "Pkg", "REPL", "Random", "Test", "UUIDs", "Unicode"]
-git-tree-sha1 = "48ad8dcdacf24185eb1bc4253a17dc39e1485079"
+git-tree-sha1 = "e45f79d83a61ee6fc229b22df6836d18b6dcb89e"
 uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
-version = "0.7.10"
+version = "0.7.11"
 
 [[Rsvg]]
 deps = ["BinDeps", "Cairo", "Compat", "Homebrew", "Libdl", "Pkg", "WinRPM"]
@@ -228,6 +228,12 @@ uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 [[SparseArrays]]
 deps = ["LinearAlgebra", "Random"]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+
+[[StaticArrays]]
+deps = ["InteractiveUtils", "LinearAlgebra", "Random", "Statistics", "Test"]
+git-tree-sha1 = "d432c79bef174a830304f8601427a4357dfdbfb7"
+uuid = "90137ffa-7385-5640-81b9-e52037218182"
+version = "0.8.3"
 
 [[Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
