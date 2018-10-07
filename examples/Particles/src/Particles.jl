@@ -1,13 +1,16 @@
 module Particles
 
+using StaticArrays
+
 import Gloria: onevent!, render!, update!, after_update!
 using Gloria: Gloria, AbstractObject, AbstractShape, Audio, Event, Layer, Scene, Texture, Window,
     add!, kill!, play!,
     getmousestate, isalive, isbutton, iskey, ispressed, tocoordinates
 
-using Gloria.Shapes: Point, circle, inside, intersects, polygon, subdivide
+using Gloria.Shapes: Shapes, Polygon, Polyline, Vertex, rotate
 
 using Gloria.Physics
+using Gloria.Physics: Physics
 
 using Colors: RGB, @colorant_str
 
@@ -18,14 +21,17 @@ using Colors: RGB, @colorant_str
 mutable struct Controls <: AbstractObject end
 
 struct Floor <: AbstractObject end
-Physical{Floor}(y) = Physical(Floor(), (Point(-width/2, 0.), Point(width/2, 0.)), y=y, static=true)
-struct Wall <: AbstractObject end
-Physical{Wall}(x) = Physical(Wall(), polygon((Point(-50., -height/2), Point(-50., height/2), Point(50., height/2), Point(50., -height/2))), x=x, static=true)
+Physical{Floor}(x, y, θ) = Physical(Floor(), Shapes.HalfSpace(Vertex(0., 0), SVector(1., 0.) |> rotate(θ)), position=SVector(x, y), static=true)
 
 mutable struct Particle <: AbstractObject
     color::RGB
 end
-Physical{Particle}(color, x, y, n=6) = Physical(Particle(color), subdivide(polygon([(r = 1randn(); Point((50+r)cos(2π*i/n), (50+r)sin(2π*i/n))) for i in 0:(n-1)]), 2), x=x, y=y, m=5., I=5000.)
+Physical{Particle}(color, x, y, n=5) = Physical(
+    Particle(color),
+    Polygon((r = 0rand(); Vertex((10 + r)cos(2π*i/n), (10 + r)sin(2π*i/n))) for i in 0:(n-1)),
+    position=SVector(x, y),
+    mass=5.,
+    angularmass=5000.)
 
 ##################################################
 # Events
@@ -48,27 +54,24 @@ end
 ##################################################
 
 function after_update!(self::Physical{Particle}, ::Layer, t, dt)
-    self.vy += 500.0*dt
+    Physics.setvelocity!(self, Physics.velocity(self) + SVector(0., 500.0*dt))
 end
+
+Physics.restitution(::Physical{Particle}, ::Physical{Particle}) = 1.0
+Physics.restitution(::Physical{Floor}, ::Physical{Particle}) = 1.0
+Physics.restitution(::Physical{Particle}, ::Physical{Floor}) = 1.0
 
 ##################################################
 # Render
 ##################################################
 
 function render!(layer::Layer, self::Physical{Particle}, frame::Int, fps::Float64)
-    render!(layer, self.shape, self.x, self.y, self.θ, color=self.color)
+    render!(layer, self.shape, Physics.position(self)..., Physics.angle(self)..., color=self.color)
 end
 
-function render!(layer::Layer, self::Union{Physical{Floor}, Physical{Wall}}, frame::Int, fps::Float64)
-    render!(layer, self.shape, self.x, self.y, self.θ, color=colorant"#000")
+function render!(layer::Layer, self::Union{Physical{Floor}}, frame::Int, fps::Float64)
+    render!(layer, self.shape, Physics.position(self)..., Physics.angle(self)..., color=colorant"#000")
 end
-
-# function render!(layer::Layer, self::Controls, frame::Int, fps::Float64)
-#     if count(x->x isa Physical{Particle}, object_layer) > 0
-#         x, y = Gloria.Physics.centerofmass(filter(x->x isa Physical{Particle}, object_layer))
-#         render!(layer, Circle(0., 0., 10.), x, y, 0., color=colorant"#F00")
-#     end
-# end
 
 ###
 
@@ -87,12 +90,13 @@ const window = Window("Inside", width, height, scene, fullscreen=false)
 
 const keyboard = Gloria.KeyboardState()
 
-add!(object_layer, Physical{Floor}(200.))
-add!(object_layer, Physical{Wall}(-300.))
-add!(object_layer, Physical{Wall}(300.))
-# for _ in 1:1
-#     add!(object_layer, Physical{Particle}(colorant"#000", rand(-width/2:width/2), rand(-height/2:(-height/b2+200))))
-# end
+add!(object_layer, Physical{Floor}(0., 200., -90.))
+add!(object_layer, Physical{Floor}(0., -200., 90.))
+add!(object_layer, Physical{Floor}(-300., 0., 0.))
+add!(object_layer, Physical{Floor}(300., 0., 180.))
+for _ in 1:20
+    add!(object_layer, Physical{Particle}(colorant"#000", rand(-width/2:width/2), rand(-height/2:(-height/2+200)), rand(3:7)))
+end
 
 function main(;keepalive=true)
     Gloria.run!(window)
