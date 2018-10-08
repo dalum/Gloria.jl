@@ -7,7 +7,7 @@ using StaticArrays
 
 using Gloria: AbstractObject, AbstractLayer, AbstractScene, RenderTask,
     add!, kill!, populate!
-using ..Shapes: Shapes, AbstractShape, BoundingBox,
+using ..Shapes: Shapes, AbstractShape, BoundingBox, Vertex,
     edges, rotate, trace, translate, vertices
 
 export Physical
