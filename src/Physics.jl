@@ -148,29 +148,29 @@ for name in [:mass, :angularmass, :position, :angle, :velocity, :angularvelocity
     end
 
     @eval function $(Symbol("set$(name)!"))(obj::Physical, val)
-        isnan(val) && error("value contains NaN: $val")
+        any(isnan.(val)) && error("value contains NaN: $val")
         currentstate(obj).$name = val
         return obj
     end
 end
 
 function translate!(obj::Physical, val::SVector)
-    isnan(val) && error("value contains NaN: $val")
+    any(isnan.(val)) && error("value contains NaN: $val")
     setposition!(obj, position(obj) + val)
 end
 
 function rotate!(obj::Physical, val::SVector)
-    isnan(val) && error("value contains NaN: $val")
+    any(isnan.(val)) && error("value contains NaN: $val")
     setangle!(obj, angle(obj) + val)
 end
 
 function boost!(obj::Physical, val::SVector)
-    isnan(val) && error("value contains NaN: $val")
+    any(isnan.(val)) && error("value contains NaN: $val")
     setvelocity!(obj, velocity(obj) + val)
 end
 
 function angularboost!(obj::Physical, val::SVector)
-    isnan(val) && error("value contains NaN: $val")
+    any(isnan.(val)) && error("value contains NaN: $val")
     setangularvelocity!(obj, angularvelocity(obj) + val)
 end
 
