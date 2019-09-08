@@ -21,25 +21,50 @@ using Colors: RGB, @colorant_str
 mutable struct Controls <: AbstractObject end
 
 struct Floor <: AbstractObject end
-Physical{Floor}(x, y, θ) = Physical(Floor(), Shapes.HalfSpace(Vertex(0., 0), SVector(1., 0.) |> rotate(θ)), position=SVector(x, y), static=true)
+function Physical{Floor}(x, y, θ)
+    Physical(
+        Floor(),
+        Shapes.HalfSpace(
+            Vertex(0., 0),
+            SVector(1., 0.) |> rotate(θ)
+        ),
+        position = SVector(x, y),
+        static = true
+    )
+end
 
 struct Plateau <: AbstractObject end
-Physical{Plateau}(x, y, w, h, θ) = Physical(
-    Plateau(),
-    Shapes.Polygon(Vertex(-w/2., h/2), Vertex(w/2., h/2), Vertex(w/2., -h/2), Vertex(-w/2., -h/2)),
-    position=SVector(x, y),
-    angle=SVector(θ),
-    static=true)
+function Physical{Plateau}(x, y, w, h, θ)
+    Physical(
+        Plateau(),
+        Shapes.Polygon(
+            Vertex(-w/2., h/2),
+            Vertex(w/2., h/2),
+            Vertex(w/2., -h/2),
+            Vertex(-w/2., -h/2)
+        ),
+        position = SVector(x, y),
+        angle = SVector(θ),
+        static = true
+    )
+end
 
 mutable struct Particle <: AbstractObject
     color::RGB
 end
-Physical{Particle}(color, x, y, n=4) = Physical(
-    Particle(color),
-    Polygon((r = 0rand(); Vertex((20 + r)cos(2π*i/n), (20 + r)sin(2π*i/n))) for i in 0:(n-1)),
-    position=SVector(x, y),
-    mass=5.,
-    angularmass=1500.)
+function Physical{Particle}(color, x, y, n=4)
+    Physical(
+        Particle(color),
+        Polygon(
+        let r = 0rand()
+            Vertex((20 + r)cos(2π*i/n), (20 + r)sin(2π*i/n))
+        end for i in 0:(n-1)
+        ),
+        position = SVector(x, y),
+        mass = 5.,
+        angularmass = 1500.
+    )
+end
 
 ##################################################
 # Events
