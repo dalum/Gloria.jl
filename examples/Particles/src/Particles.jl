@@ -7,7 +7,7 @@ using Gloria: Gloria, AbstractObject, AbstractShape, Audio, Event, Layer, Scene,
     add!, kill!, play!,
     getmousestate, isalive, isbutton, iskey, ispressed, tocoordinates
 
-using Gloria.Shapes: Shapes, Polygon, Polyline, Vertex, rotate
+using Gloria.Shapes: Shapes, Polygon, Vertex, rotate
 
 using Gloria.Physics
 using Gloria.Physics: Physics
