@@ -13,7 +13,7 @@ end
 _loop(name::String, body::Expr) = _loop(name, :(), body)
 function _loop(name::String, initialize::Expr, body::Expr, finalize::Expr = :(), target_speed::Float64 = 50.0)
     global GLOBAL_LOOP_LOCK
-    quote
+    esc(quote
         function (window::Window, target_speed::Float64 = $target_speed)
             loop = Loop($name, target_speed)
             _lock = 0x00
@@ -41,7 +41,7 @@ function _loop(name::String, initialize::Expr, body::Expr, finalize::Expr = :(),
             loop.task = task
             return loop
         end
-    end
+    end)
 end
 
 # Default loops
