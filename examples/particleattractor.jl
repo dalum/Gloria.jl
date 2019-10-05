@@ -1,10 +1,12 @@
 module ParticleAttractor
 
-using Gloria: Gloria, Window, AbstractObject
-Gloria.init()
+import Gloria:  onevent!, render!, update!
+using Gloria:   Gloria, Window, AbstractObject, Event, Layer, Scene
+
+struct Controls <: AbstractObject end
 
 struct World <: AbstractObject
-    action::Vector{Int}
+    action::Ref{Int}
     objects::Vector{AbstractObject}
 end
 
@@ -18,25 +20,41 @@ mutable struct Particle <: AbstractObject
 end
 
 const width, height = 800, 600
-const window = Window("Particle Attractor", (width, height), target_fps=30.0, target_speed=30.0, fullscreen=false)
-const world = World([false], AbstractObject[Particle(width/2 + rand() - 0.5, height/2 + rand() - 0.5, 0, 0, 200, 0.5) for _ in 1:15000])
-push!(window.scene_stack[end].objects, world)
+const world = World(
+    Ref{Int}(false),
+    AbstractObject[Particle(
+        width/2 + rand() - 0.5, height/2 + rand() - 0.5,
+        0, 0,
+        200, 0.5
+    ) for _ in 1:15000]
+)
+const controls_layer = Layer([Controls()], show=false)
+const scene = Scene(Layer([world]), controls_layer)
+const window = Window("Particle Attractor", width, height, scene, fullscreen=false)
 
-Gloria.Mouse.buttondown(button, x, y) = (world.action[] += 2 - button)
-Gloria.Mouse.buttonup(button, x, y) = (world.action[] -= 2 - button)
 
-function Gloria.update(world::World; args...)
-    mouse = Gloria.Mouse.getmousestate()
+function Gloria.onevent!(::Controls, e::Event{:mousebutton_down})
+    world.action[] += 2 - e.button
+end
+function Gloria.onevent!(::Controls, e::Event{:mousebutton_up})
+    world.action[] -= 2 - e.button
+end
+function Gloria.onevent!(::Controls, e::Event{:key_down})
+    iskey(e, "escape") && Gloria.quit!(window, e)
+end
+
+function Gloria.update!(world::World, ::Gloria.AbstractLayer, t, dt)
+    mouse = Gloria.getmousestate()
 
     # for obj1 in world.objects, obj2 in world.objects
-    #     Gloria.update(obj1, obj2; args...)
+    #     Gloria.update!(obj1, obj2, t, dt)
     # end
     for obj in world.objects
-        Gloria.update(obj; mouse=mouse, args...)
+        Gloria.update!(obj, mouse, t, dt)
     end
 end
 
-function Gloria.update(obj::Particle; mouse, t, dt)
+function Gloria.update!(obj::Particle, mouse, t, dt)
     Δx, Δy = mouse.x - obj.x, mouse.y - obj.y
     obj.vx += dt * (world.action[] * obj.accel * Δx / (Δx^2 + Δy^2 + 1) - obj.vx * obj.resistance)
     obj.vy += dt * (world.action[] * obj.accel * Δy / (Δx^2 + Δy^2 + 1) - obj.vy * obj.resistance)
@@ -46,27 +64,33 @@ function Gloria.update(obj::Particle; mouse, t, dt)
     obj.y = mod(obj.y, height)
 end
 
-function Gloria.update(obj1::Particle, obj2::Particle; t, dt)
+@fastmath function Gloria.update!(obj1::Particle, obj2::Particle, t, dt)
     Δx, Δy = obj1.x - obj2.x, obj1.y - obj2.y
-    obj1.vx += dt * (obj1.accel * Δx / (Δx^2 + Δy^2)) / 1000
-    obj1.vy += dt * (obj1.accel * Δy / (Δx^2 + Δy^2)) / 1000
+    obj1.vx += 1e-4 * dt * (obj1.accel * Δx / (Δx^2 + Δy^2 + 1))
+    obj1.vy += 1e-4 * dt * (obj1.accel * Δy / (Δx^2 + Δy^2 + 1))
 end
 
-function Gloria.render(window::Window, world::World; args...)
-    Gloria.Graphics.setcolor!(window, 100, 100, 100, 255)
-    Gloria.Graphics.clear!(window)
+function Gloria.render!(::Layer, obj::World, frame, fps)
+    Gloria.render!(window, obj, frame, fps)
+end
+function Gloria.render!(window::Window, world::World, frame, fps)
+    Gloria.setcolor!(window, 100, 100, 100, 255)
+    Gloria.clear!(window)
     for obj in world.objects
-        Gloria.render(window, obj; args...)
+        Gloria.render!(window, obj, frame, fps)
     end
-    Gloria.Graphics.present!(window)
+    Gloria.present!(window)
 end
 
-function Gloria.render(window::Window, obj::Particle; frame, fps)
-    Gloria.Graphics.setcolor!(window, 255, 255, 255, 255)
-    Gloria.Graphics.drawpoint!(window, (Int(floor(obj.x)), Int(floor(obj.y))))
+function Gloria.render!(window::Window, obj::Particle, frame, fps)
+    Gloria.setcolor!(window, 255, 255, 255, 255)
+    Gloria.drawpoint!(window, Int(floor(obj.x)), Int(floor(obj.y)))
     # Gloria.Graphics.fillrect(window, Int(floor(obj.x)), Int(floor(obj.y)), 20, 20)
     # Gloria.Graphics.setcolor(window, 0, 0, 0, 255)
     # Gloria.Graphics.drawrect(window, Int(floor(obj.x)), Int(floor(obj.y)), 20, 20)
 end
+
+Gloria.run!(window)
+wait(window)
 
 end # module
