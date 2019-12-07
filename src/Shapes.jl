@@ -730,8 +730,19 @@ at an angle `θ`.  A shape is determined to be inside if either:
    `shape1` an odd number of times.
 
 """
-function inside(l::AbstractLineShape{N,2}, p::Vertex{2}, θ) where N
-    ray = Polyline(p, p |> translate(cosd(θ)*1e6, sind(θ)*1e6))
+function inside(l::AbstractLineShape{N,2}, p::Vertex{2}) where N
+    # Ray from p through shape center
+    c = centroid(l)
+    p2c = normalize(c .- p)
+    ray_endpoint = Vertex((p .+ 1e6 * p2c)...)
+    return inside(l, p, ray_endpoint)
+end
+function inside(l::AbstractLineShape{N,2}, p::Vertex{2}, θ::Number) where N
+    ray_endpoint = p |> translate(cosd(θ)*1e6, sind(θ)*1e6)
+    return inside(l, p, ray_endpoint)
+end
+function inside(l::AbstractLineShape{N,2}, p1::Vertex{2}, p2::Vertex{2}) where N
+    ray = Polyline(p1, p2)
     n = count(edges(l)) do e
         if intersects(e, ray)
             i1 = intersects(e[1], ray)

@@ -5,9 +5,11 @@ using Gloria: Gloria, AbstractObject, Audio, Event, Font, Layer, Resources, Scen
     add!, kill!, killall!, play!, settimer!,
     isalive, iskey, ispressed, text
 
-using Gloria.Shapes: Line, Point, circle, polygon
-using Gloria.Physics: Physical, timeintersects
+using Gloria.Shapes: Vertex, Point, circle, Polygon, intersects
+using Gloria.Physics: Physical, timeintersects, position, velocity, angle, angularvelocity,
+    setposition!, setangle!, setvelocity!, setangularvelocity!
 
+using StaticArrays
 using Colors: @colorant_str
 
 ##################################################
@@ -43,19 +45,24 @@ struct Rock <: AsteroidsObject
 end
 
 function Physical{Player}(a, α)
-    shape = polygon((Point(-15., 0.), Point(-25., 15.), Point(25., 0.), Point(-25., -15.)))
+    shape = Polygon(
+        Vertex(-15., 0.),
+        Vertex(-25., 15.),
+        Vertex(25., 0.),
+        Vertex(-25., -15.)
+    )
     return Physical(Player(a, α), shape)
 end
 
 function Physical{Shield}(t)
-    self = Physical(Shield(), circle(Point(0., 0.), 50))
+    self = Physical(Shield(), circle(Vertex(0., 0.), 50))
     settimer!(window, t, ()->kill!(object_layer, self))
     return self
 end
 
 function Physical{LaserBeam}(t, x, y, vx, vy, θ)
-    shape = Point(0., 0.)
-    self = Physical(LaserBeam(), shape; x=x, y=y, θ=θ, vx=vx, vy=vy)
+    shape = circle(Vertex(0., 0.), 5)
+    self = Physical(LaserBeam(), shape; position=SVector(x, y), angle=SVector(θ), velocity=SVector(vx, vy))
     settimer!(window, t, ()->kill!(object_layer, self))
     return self
 end
@@ -63,8 +70,13 @@ Base.size(::Physical{LaserBeam}) = 25
 
 function Physical{Rock}(scale, x, y, vx, vy, θ, ω)
     n = 12
-    shape = polygon([Point((50cos(2π*i/n))*scale, (50sin(2π*i/n)+10randn())*scale) for i in 0:(n-1)])
-    return Physical(Rock(scale), shape, x=x, y=y, θ=θ, vx=vx, vy=vy, ω=ω)
+    shape = Polygon([
+        Vertex(
+            (50cos(2π*i/n))*scale,
+            (50sin(2π*i/n)+10randn())*scale
+        ) for i in 0:(n-1)
+    ]...)
+    return Physical(Rock(scale), shape, position=SVector(x, y), angle=SVector(θ), velocity=SVector(vx, vy), angularvelocity=SVector(ω))
 end
 
 ##################################################
@@ -82,13 +94,19 @@ end
 function onevent!(self::Physical{Player}, e::Event{:key_down}, t, dt)
     if controls.level > 0 && iskey(e, "space")
         play!(laser_sound, volume=10)
-        add!(object_layer, Physical{LaserBeam}(t + 1, self.x, self.y, self.vx + cosd(self.θ)*500, self.vy + sind(self.θ)*500, self.θ))
+        θ = angle(self)[1]
+        add!(object_layer, Physical{LaserBeam}(
+            t + 1,
+            position(self)...,
+            (velocity(self) + SVector(cosd(θ)*500, sind(θ)*500))...,
+            θ
+        ))
     end
 end
 
 function onevent!(self::Physical{Player}, e::Event{:key_up})
     if iskey(e, "right") || iskey(e, "left")
-        self.ω = 0.
+        setangularvelocity!(self, SVector(0.))
     end
 end
 
@@ -96,7 +114,7 @@ end
 # Update
 ##################################################
 
-function update!(self::Controls, t, dt)
+function update!(self::Controls, ::Gloria.AbstractLayer, t, dt)
     if self.level > 0 && count(x->x isa Physical{Rock}, object_layer) == 0
         if !self.transition
             settimer!(window, t + 1, ()->(nextlevel!(t+1); self.transition = false))
@@ -109,24 +127,36 @@ function update!(self::Controls, t, dt)
     end
 end
 
-function update!(self::Physical{Player}, t, dt)
+function update!(player::Physical{Player}, ::Gloria.AbstractLayer, t, dt)
     if ispressed(keyboard, "up")
-        self.vx += self.wrapped.a*cosd(self.θ)*dt
-        self.vy += self.wrapped.a*sind(self.θ)*dt
+        θ = angle(player)[1]
+        v = velocity(player)
+        new_v = v + player.wrapped.a * dt * SVector(cosd(θ), sind(θ))
+        setvelocity!(player, new_v)
     end
-    if ispressed(keyboard, "left") && abs(self.ω) < 360
-        self.ω -= self.wrapped.α*dt
+    ω = Gloria.Physics.angularvelocity(player)[1]
+    if ispressed(keyboard, "left") && abs(ω) < 360
+        ω -= player.wrapped.α*dt
+        setangularvelocity!(player, SVector(ω))
     end
-    if ispressed(keyboard, "right") && abs(self.ω) < 360
-        self.ω += self.wrapped.α*dt
+    if ispressed(keyboard, "right") && abs(ω) < 360
+        ω += player.wrapped.α*dt
+        setangularvelocity!(player, SVector(ω))
     end
 
-    for rock in filter(obj -> obj isa Physical{Rock} && isalive(object_layer, obj) && timeintersects(self, obj), object_layer)
-        destroyrock!(rock, self)
+    rocks = filter(
+        obj ->  obj isa Physical{Rock} &&
+                isalive(object_layer, obj) &&
+                intersects(player, obj),
+        object_layer
+    )
+
+    for rock in rocks
+        destroyrock!(rock, player)
 
         if !any(x->x isa Physical{Shield}, object_layer)
-            self.x, self.y = 0., 0.
-            self.vx, self.vy = 0., 0.
+            setposition!(player, SVector(0., 0.))
+            setvelocity!(player, SVector(0., 0.))
             controls.lives -= 1
             if controls.lives >= 0
                 add!(object_layer, Physical{Shield}(t + 2))
@@ -135,28 +165,40 @@ function update!(self::Physical{Player}, t, dt)
     end
 end
 
-function update!(self::Physical{Shield}, t, dt)
-    self.x = player.x
-    self.y = player.y
+function update!(self::Physical{Shield}, ::Gloria.AbstractLayer, t, dt)
+    setposition!(self, Gloria.Physics.position(player))
 
-    for rock in filter(obj -> obj isa Physical{Rock} && isalive(object_layer, obj) && timeintersects(self, obj), object_layer)
+    for rock in filter(
+            obj ->  obj isa Physical{Rock} &&
+                    isalive(object_layer, obj) &&
+                    intersects(self, obj),
+            object_layer
+        )
         destroyrock!(rock, self)
     end
 end
 
-function update!(self::Physical{LaserBeam}, t, dt)
-    for rock in filter(obj -> obj isa Physical{Rock} && isalive(object_layer, obj) && timeintersects(self, obj), object_layer)
+function update!(self::Physical{LaserBeam}, ::Gloria.AbstractLayer, t, dt)
+    for rock in filter(
+            obj ->  obj isa Physical{Rock} &&
+                    isalive(object_layer, obj) &&
+                    intersects(self, obj),
+            object_layer
+        )
         kill!(object_layer, self)
         destroyrock!(rock, self)
     end
 end
 
-function Gloria.after_update!(self::Physical{<:AsteroidsObject}, t, dt)
-    self.x > width/2  + size(self) && (self.x -= width + 2size(self))
-    self.x < -width/2 - size(self) && (self.x += width + 2size(self))
-    self.y > height/2 + size(self) && (self.y -= height + 2size(self))
-    self.y < -height/2 - size(self) && (self.y += height + 2size(self))
+function Gloria.after_update!(self::Physical{<:AsteroidsObject}, ::Gloria.AbstractLayer, t, dt)
+    x, y = position(self)
+    x >  width/2  && (x -= width)
+    x < -width/2  && (x += width)
+    y >  height/2 && (y -= height)
+    y < -height/2 && (y += height)
+    setposition!(self, SVector(x, y))
 end
+
 
 ##################################################
 # Render
@@ -178,11 +220,11 @@ function render!(layer::Layer, self::Controls, frame::Int, fps::Float64)
 end
 
 function render!(layer::Layer, self::Physical{<:Union{LaserBeam,Player,Shield}}, frame::Int, fps::Float64)
-    render!(layer, self.shape, self.x, self.y, self.θ, color=colorant"#C0C0C0")
+    render!(layer, self.shape, position(self)..., angle(self)..., color=colorant"#C0C0C0")
 end
 
 function render!(layer::Layer, self::Physical{Rock}, frame::Int, fps::Float64)
-    render!(layer, self.shape, self.x, self.y, self.θ, color=colorant"#A0A0A0")
+    render!(layer, self.shape, position(self)..., angle(self)..., color=colorant"#A0A0A0")
 end
 
 ##################################################
@@ -194,8 +236,9 @@ function startgame!(t)
     controls.transition = false
     controls.level = 0
     controls.lives = 3
-    player.ω = 0
-    player.θ = -90
+    setangularvelocity!(player, SVector(0.))
+    setangle!(player, SVector(-90.))
+
 
     add!(object_layer, player, Physical{Shield}(t + 3))
 end
@@ -214,13 +257,14 @@ function destroyrock!(rock, other)
         kill!(object_layer, rock)
         if rock.scale > 0.25
             for _ in 1:2
-                vx = 0.1other.vx/rock.scale + rock.vx
-                vy = 0.1other.vy/rock.scale + rock.vy
-                ω = rock.ω + 50*(rand() - 0.5)
+                x, y = position(rock)
+                scale = rock.wrapped.scale
+                vx, vy = 0.1 * velocity(other) ./ scale + velocity(rock)
+                ω = angularvelocity(rock)[1] + 50*(rand() - 0.5)
                 add!(object_layer, Physical{Rock}(
-                    rock.scale/2,
-                    rock.x + 25rock.scale*randn(),
-                    rock.y + 25rock.scale*randn(),
+                    scale/2,
+                    x + 25scale*randn(),
+                    y + 25scale*randn(),
                     vx, vy, 360rand(), ω))
             end
         end
@@ -236,9 +280,9 @@ function nextlevel!(t)
     # Initialize the next level
     controls.level += 1
     level = controls.level
-    player.x, player.y = 0., 0.
-    player.vx, player.vy = 0., 0.
-    player.ω = 0
+    setposition!(player, SVector(0., 0.))
+    setvelocity!(player, SVector(0., 0.))
+    setangularvelocity!(player, SVector(0.))
 
     add!(banner_layer, Banner("Level $level", t + 1))
     add!(object_layer, Physical{Shield}(t + 2))
@@ -304,6 +348,7 @@ function main(; keepalive=true)
         wait(window)
     end
 end
+
 
 ##################################################
 # Precompile
