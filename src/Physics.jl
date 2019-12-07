@@ -1,4 +1,4 @@
-Physics Student at the University of Colognemodule Physics
+module Physics
 
 using Colors
 using DataStructures: CircularBuffer, OrderedSet, SortedSet
