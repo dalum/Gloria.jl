@@ -127,7 +127,7 @@ version = "2.59.0+2"
 
 [[Gloria]]
 deps = ["BenchmarkTools", "Cairo", "Colors", "Compat", "DataStructures", "FileIO", "IterTools", "Libdl", "LinearAlgebra", "Revise", "Rsvg", "SimpleDirectMediaLayer", "SnoopCompile", "StaticArrays"]
-pr on own repo
+path = "../.."
 uuid = "5b2e8964-9f3b-11e8-3f79-610468876dfe"
 version = "0.1.0"
 
