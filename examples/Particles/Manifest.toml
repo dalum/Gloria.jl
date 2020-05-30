@@ -127,9 +127,7 @@ version = "2.59.0+2"
 
 [[Gloria]]
 deps = ["BenchmarkTools", "Cairo", "Colors", "Compat", "DataStructures", "FileIO", "IterTools", "Libdl", "LinearAlgebra", "Revise", "Rsvg", "SimpleDirectMediaLayer", "SnoopCompile", "StaticArrays"]
-git-tree-sha1 = "3fa6cbcb96ada9646cf0ba4f64190f348616b4da"
-repo-rev = "master"
-repo-url = "https://github.com/dalum/Gloria.jl.git"
+path = "../.."
 uuid = "5b2e8964-9f3b-11e8-3f79-610468876dfe"
 version = "0.1.0"
 
