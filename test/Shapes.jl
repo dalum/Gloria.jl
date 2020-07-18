@@ -80,8 +80,8 @@ end
     p2 = Vertex(1., 0.8)
     l = Polyline(Vertex(-1.0, -0.5), Vertex(1.0, -0.5))
     shape = Polygon(Vertex(-1.0, -0.5), Vertex(1.0, -0.5), Vertex(2.0, 0.5), Vertex(0.0, 0.5))
-    @test projection(l, p1) == Vertex(0., -0.5)
-    @test projection(l, p2) == Vertex(1.0, -0.5)
+    @test projection(p1, l) == Vertex(0., -0.5)
+    @test projection(p2, l) == Vertex(1.0, -0.5)
 end
 
 end #module
