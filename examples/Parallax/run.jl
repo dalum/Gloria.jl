@@ -1,3 +1,5 @@
-include(abspath(@__DIR__, "src", "Parallax.jl"))
-using .Parallax
-Parallax.main()
+using Parallax
+
+Parallax.main(
+    keepalive = !Base.isinteractive(),
+)

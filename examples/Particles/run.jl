@@ -1,7 +1,5 @@
-include(abspath(@__DIR__, "src", "Particles.jl"))
-using .Particles
-if Base.isinteractive()
-    Particles.main(keepalive=false)
-else
-    Particles.main()
-end
+using Particles
+
+Particles.main(
+    keepalive = !Base.isinteractive(),
+)

@@ -344,9 +344,7 @@ const player = Physical{Player}(100., 360.)
 function main(; keepalive=true)
     Gloria.run!(window)
     startgame!(0)
-    if keepalive
-        wait(window)
-    end
+    keepalive && wait(window)
 end
 
 

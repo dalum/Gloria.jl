@@ -53,16 +53,15 @@ mutable struct Particle <: AbstractObject
     color::RGB
 end
 function Physical{Particle}(color, x, y, n=4)
+    vertices = map(0:n-1) do i
+        Vertex(20cos(2π*i/n), 20sin(2π*i/n))
+    end
     Physical(
         Particle(color),
-        Polygon(
-        let r = 0rand()
-            Vertex((20 + r)cos(2π*i/n), (20 + r)sin(2π*i/n))
-        end for i in 0:(n-1)
-        ),
+        Polygon(vertices),
         position = SVector(x, y),
-        mass = 5.,
-        angularmass = 1500.
+        mass = 5.0,
+        angularmass = 1500.0,
     )
 end
 
@@ -108,8 +107,6 @@ function render!(layer::Layer, self::Union{Physical{Floor}, Physical{Plateau}}, 
     render!(layer, self.shape, Physics.position(self)..., Physics.angle(self)..., color=colorant"#000")
 end
 
-###
-
 ##################################################
 # Setup
 ##################################################
@@ -135,11 +132,9 @@ for _ in 1:0
     add!(object_layer, Physical{Particle}(colorant"#000", rand(-width/2:width/2), rand(-height/2:(-height/2+200)), rand(3:7)))
 end
 
-function main(;keepalive=true)
+function main(; keepalive=true)
     Gloria.run!(window)
-    if keepalive
-        wait(window)
-    end
+    keepalive && wait(window)
 end
 
 end # module

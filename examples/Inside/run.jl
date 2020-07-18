@@ -1,7 +1,5 @@
-include(abspath(@__DIR__, "src", "Inside.jl"))
-using .Inside
-if Base.isinteractive()
-    Inside.main(keepalive=false)
-else
-    Inside.main()
-end
+using Inside
+
+Inside.main(
+    keepalive = !Base.isinteractive(),
+)

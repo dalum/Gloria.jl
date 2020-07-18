@@ -6,3 +6,4 @@
 deps/deps.jl
 precompile_*.jl
 compiles.csv
+Manifest.toml

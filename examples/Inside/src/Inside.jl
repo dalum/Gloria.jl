@@ -130,12 +130,9 @@ add!(shape_layer, Shape(circle(Vertex(0., 0.), 100), 0., 0., 0.))
 add!(shape_layer, Shape(Polygon(Vertex(0, 0), Vertex(100, 0), Vertex(0, 100)), 200., 0., 40.))
 add!(shape_layer, Shape(Polyline([Vertex(100(i - 5), randn()*50 + 200) for i in 0:10]...), 0., 0., -10.))
 
-function main(;keepalive=true)
+function main(; keepalive=true)
     Gloria.run!(window)
-    if keepalive
-        wait(window)
-    end
+    keepalive && wait(window)
 end
-main()
 
 end # module

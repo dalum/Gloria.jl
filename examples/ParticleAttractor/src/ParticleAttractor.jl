@@ -1,7 +1,7 @@
 module ParticleAttractor
 
-import Gloria:  onevent!, render!, update!
-using Gloria:   Gloria, Window, AbstractObject, Event, Layer, Scene
+import Gloria: onevent!, render!, update!
+using Gloria: Gloria, Window, AbstractObject, Event, Layer, Scene
 
 struct Controls <: AbstractObject end
 
@@ -40,7 +40,7 @@ function Gloria.onevent!(::Controls, e::Event{:mousebutton_up})
     world.action[] -= 2 - e.button
 end
 function Gloria.onevent!(::Controls, e::Event{:key_down})
-    iskey(e, "escape") && Gloria.quit!(window, e)
+    Gloria.iskey(e, "escape") && Gloria.quit!(window, e)
 end
 
 function Gloria.update!(world::World, ::Gloria.AbstractLayer, t, dt)
@@ -90,7 +90,9 @@ function Gloria.render!(window::Window, obj::Particle, frame, fps)
     # Gloria.Graphics.drawrect(window, Int(floor(obj.x)), Int(floor(obj.y)), 20, 20)
 end
 
-Gloria.run!(window)
-wait(window)
+function main(; keepalive=true)
+    Gloria.run!(window)
+    keepalive && wait(window)
+end
 
 end # module

@@ -81,9 +81,9 @@ for layer in object_layers
     ]...)
 end
 
-function main()
+function main(; keepalive=true)
     Gloria.run!(window)
-    wait(window)
+    keepalive && wait(window)
 end
 
 # precompile
