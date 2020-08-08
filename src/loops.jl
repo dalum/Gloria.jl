@@ -14,18 +14,18 @@ function _loop(name, initialize, body, finalize=:(), target_speed=50)
 
             task = @task try
                 @debug "Running $($name) on thread: $(Threads.threadid())"
-                t0 = time()
+                delta_times = CircularBuffer{Float64}(ceil(Int, target_speed/4))
                 ticks = 0
-                next_tick_time = (ticks + 1)/target_speed
+                t0 = time()
                 elapsed_time = time() - t0
-                dt = max(next_tick_time - elapsed_time, 1e-3)
+                push!(delta_times, 1/target_speed)
                 $initialize
                 while length(window.scene_stack) > 0
                     $body
-                    next_tick_time = (ticks + 1)/target_speed
-                    elapsed_time = time() - t0
-                    dt = max(next_tick_time - elapsed_time, 1e-3)
-                    sleep(dt)
+                    expected_time = ticks/target_speed
+                    push!(delta_times, time() - (t0 + elapsed_time))
+                    elapsed_time += delta_times[end]
+                    sleep(max(1/target_speed + expected_time - elapsed_time, 1e-3))
                     ticks += 1
                 end
                 $finalize
@@ -49,7 +49,7 @@ const DEFAULT_EVENT_LOOP = @loop "event" (event_data = zeros(UInt8, 56)) begin
     end
 end
 
-const DEFAULT_UPDATE_LOOP = @loop "update" (t = elapsed_time) begin
+const DEFAULT_UPDATE_LOOP = @loop "update" (t = elapsed_time; dt = 1/target_speed) begin
     if !loop.paused
         t = elapsed_time
     end
@@ -72,7 +72,7 @@ const DEFAULT_UPDATE_LOOP = @loop "update" (t = elapsed_time) begin
 end
 
 const DEFAULT_RENDER_LOOP = @loop "render" () begin
-    fps = inv(dt)
+    fps = length(delta_times)/sum(delta_times)
     render!(window, ticks, fps)
 end
 

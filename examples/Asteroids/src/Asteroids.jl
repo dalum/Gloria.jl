@@ -209,7 +209,9 @@ function render!(layer::Layer, self::Banner, frame::Int, fps::Float64)
     render!(layer, text(font_noto, self.text, color=colorant"#FFFFFF", halign=0.5, valign=0.5), 0., 0., 0.)
 end
 
-function render!(layer::Layer, self::Controls, frame::Int, fps::Float64)
+function render!(layer::Layer, self::Controls, frame, fps)
+    render!(layer, text(font_noto, "FPS: $(round(fps; digits=1))", color=colorant"#FFFFFF"; halign=1.0), width, 0., 0.)
+
     if self.level > 0 && self.lives >= 0
         render!(layer, text(font_noto, "Lives: $(self.lives)", color=colorant"#FFFFFF"), 0., 0., 0.)
     elseif self.level == 0

@@ -63,49 +63,51 @@ end
 
 # Setup
 
-# const width, height = 1920, 1080
-const width, height = 800, 600
-const controls_layer = Layer([Controls()], show=false)
-const object_layers = [Layer(Object[], width/2, height/2, scale=1.5^-n) for n in 10:-1:0]
-const scene = Scene(controls_layer, object_layers...)
-const window = Window("Parallax", width, height, scene, fullscreen=false)
-
-for layer in object_layers
-    push!(layer, [
-        Object(
-            abspath(@__DIR__, "..", "assets", "sample.svg"),
-            (rand() - 0.5)*0.5width, (rand() - 0.5)*0.5height,
-            (rand() - 0.5)*width, (rand() - 0.5)*height,
-            rand()*360, (rand() - 0.5)*1080
-        ) for _ in 1:50
-    ]...)
-end
-
 function main(; keepalive=true)
+    @eval begin
+        # const width, height = 1920, 1080
+        const width, height = 800, 600
+        const controls_layer = Layer([Controls()], show=false)
+        const object_layers = [Layer(Object[], width/2, height/2, scale=1.5^-n) for n in 10:-1:0]
+        const scene = Scene(controls_layer, object_layers...)
+        const window = Window("Parallax", width, height, scene, fullscreen=false)
+
+        for layer in object_layers
+            push!(layer, [
+                Object(
+                    abspath(@__DIR__, "..", "assets", "sample.svg"),
+                    (rand() - 0.5)*0.5width, (rand() - 0.5)*0.5height,
+                    (rand() - 0.5)*width, (rand() - 0.5)*height,
+                    rand()*360, (rand() - 0.5)*1080
+                ) for _ in 1:50
+            ]...)
+        end
+    end
+
     Gloria.run!(window)
     keepalive && wait(window)
 end
 
-# precompile
-const dir = abspath(@__DIR__, "..", "precompile")
-const blacklist_import = [:Parallax, :unknown]
-const fnames = collect(filter(x->occursin(r"^precompile_.*\.jl$", x), readdir(dir)))
-const names = (fname->Symbol(match(r"^precompile_(.*)\.jl$", fname)[1])).(fnames)
-for name in names
-    name in blacklist_import && continue
-    try
-        @eval import $name
-    catch e
-        @warn "Failed import of: $name ($e)"
-    end
-end
-for fname in fnames
-    try
-        include(joinpath(dir, fname))
-        _precompile_()
-        catch e
-        @warn "Failed additional precompilation of: $fname ($e)"
-    end
-end
+# # precompile
+# const dir = abspath(@__DIR__, "..", "precompile")
+# const blacklist_import = [:Parallax, :unknown]
+# const fnames = collect(filter(x->occursin(r"^precompile_.*\.jl$", x), readdir(dir)))
+# const names = (fname->Symbol(match(r"^precompile_(.*)\.jl$", fname)[1])).(fnames)
+# for name in names
+#     name in blacklist_import && continue
+#     try
+#         @eval import $name
+#     catch e
+#         @warn "Failed import of: $name ($e)"
+#     end
+# end
+# for fname in fnames
+#     try
+#         include(joinpath(dir, fname))
+#         _precompile_()
+#         catch e
+#         @warn "Failed additional precompilation of: $fname ($e)"
+#     end
+# end
 
 end # module

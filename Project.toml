@@ -1,7 +1,7 @@
 name = "Gloria"
 uuid = "5b2e8964-9f3b-11e8-3f79-610468876dfe"
 authors = ["Sakse Dalum <dalum@users.noreply.github.com>"]
-version = "0.2.0"
+version = "0.2.1"
 
 [deps]
 Cairo = "159f3aea-2a34-519c-b102-8c37f9878175"

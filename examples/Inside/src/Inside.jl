@@ -116,21 +116,23 @@ end
 # Setup
 ##################################################
 
-# const width, height = 1920, 1080
-const width, height = 800, 600
-const controls_layer = Layer([Controls()], show=false)
-
-const shape_layer = Layer(Shape[], width/2, height/2)
-
-const scene = Scene(shape_layer, controls_layer, color=colorant"#D0D0D0")
-const window = Window("Inside", width, height, scene, fullscreen=false)
-const keyboard = Gloria.KeyboardState()
-
-add!(shape_layer, Shape(circle(Vertex(0., 0.), 100), 0., 0., 0.))
-add!(shape_layer, Shape(Polygon(Vertex(0, 0), Vertex(100, 0), Vertex(0, 100)), 200., 0., 40.))
-add!(shape_layer, Shape(Polyline([Vertex(100(i - 5), randn()*50 + 200) for i in 0:10]...), 0., 0., -10.))
-
 function main(; keepalive=true)
+    @eval begin
+        # const width, height = 1920, 1080
+        const width, height = 800, 600
+        const controls_layer = Layer([Controls()], show=false)
+
+        const shape_layer = Layer(Shape[], width/2, height/2)
+
+        const scene = Scene(shape_layer, controls_layer, color=colorant"#D0D0D0")
+        const window = Window("Inside", width, height, scene, fullscreen=false)
+        const keyboard = Gloria.KeyboardState()
+
+        add!(shape_layer, Shape(circle(Vertex(0., 0.), 100), 0., 0., 0.))
+        add!(shape_layer, Shape(Polygon(Vertex(0, 0), Vertex(100, 0), Vertex(0, 100)), 200., 0., 40.))
+        add!(shape_layer, Shape(Polyline([Vertex(100(i - 5), randn()*50 + 200) for i in 0:10]...), 0., 0., -10.))
+    end
+
     Gloria.run!(window)
     keepalive && wait(window)
 end

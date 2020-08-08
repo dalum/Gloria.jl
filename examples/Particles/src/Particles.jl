@@ -3,9 +3,12 @@ module Particles
 using StaticArrays
 
 import Gloria: onevent!, render!, update!, after_update!
-using Gloria: Gloria, AbstractObject, AbstractShape, Audio, Event, Layer, Scene, Texture, Window,
+using Gloria: Gloria,
+    AbstractObject, AbstractShape,
+    Event, Font, Layer, Resources, Scene, Window,
     add!, kill!, play!,
-    getmousestate, isalive, isbutton, iskey, ispressed, tocoordinates
+    getmousestate, isalive, isbutton, iskey, ispressed, tocoordinates,
+    text
 
 using Gloria.Shapes: Shapes, Polygon, Vertex, rotate
 
@@ -71,13 +74,15 @@ end
 
 function onevent!(::Controls, e::Event{:key_down})
     iskey(e, "escape") && Gloria.quit!(window, e)
-    iskey(e, "space") && (window.loops["update"].state[:paused] = !window.loops["update"].state[:paused])
-    iskey(e, "backspace") && (window.loops["update"].state[:step] = !window.loops["update"].state[:step])
+    iskey(e, "space") && (window.loops["update"].paused = !window.loops["update"].paused)
 end
 
 function onevent!(::Controls, e::Event{:mousebutton_down})
     if isbutton(e, "left")
         add!(object_layer, Physical{Particle}(colorant"#000", tocoordinates(object_layer, e.x, e.y)...))
+    end
+    if isbutton(e, "right")
+        add!(object_layer, Physical{Particle}(colorant"#000", tocoordinates(object_layer, e.x, e.y)..., 6))
     end
 end
 
@@ -107,6 +112,10 @@ function render!(layer::Layer, self::Union{Physical{Floor}, Physical{Plateau}}, 
     render!(layer, self.shape, Physics.position(self)..., Physics.angle(self)..., color=colorant"#000")
 end
 
+function render!(layer::Layer, ::Controls, frame, fps)
+    render!(layer, text(font_noto, "FPS: $(round(fps; digits=1))", color=colorant"#000"; halign=1.0), width, 0., 0.)
+end
+
 ##################################################
 # Setup
 ##################################################
@@ -114,14 +123,18 @@ end
 function main(; keepalive=true)
     @eval begin
         const width, height = 800, 600
-        const controls_layer = Layer([Controls()], width/2, height/2)
+        const controls_layer = Layer([Controls()])
 
-        const object_layer = Layer(Gloria.AbstractObject[Physics.CollisionSolver{2}()], width/2, height/2)
+        const object_layer = Layer(AbstractObject[Physics.CollisionSolver{2}()], width/2, height/2)
 
-        const scene = Scene(controls_layer, object_layer, color=colorant"#D0D0D0")
+        const scene = Scene(object_layer, controls_layer, color=colorant"#D0D0D0")
+
         const window = Window("Particles", width, height, scene, fullscreen=false)
 
+        const resources = Resources(window)
         const keyboard = Gloria.KeyboardState()
+
+        const font_noto = Font(resources, abspath(@__DIR__, "..", "assets", "NotoSans-Black.ttf"), fontsize=24)
 
         add!(object_layer, Physical{Floor}(0., 200., -90.))
         add!(object_layer, Physical{Floor}(0., -200., 80.))
@@ -133,6 +146,7 @@ function main(; keepalive=true)
         for _ in 1:0
             add!(object_layer, Physical{Particle}(colorant"#000", rand(-width/2:width/2), rand(-height/2:(-height/2+200)), rand(3:7)))
         end
+
     end
 
     Gloria.run!(window)

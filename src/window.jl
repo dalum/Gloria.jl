@@ -111,6 +111,8 @@ struct RenderTask{T}
     color::Colors.RGB
 end
 
+RenderTask(source::T, args...) where {T} = RenderTask{T}(source, args...)
+
 """
 
 A Layer object runs inside a Scene.
