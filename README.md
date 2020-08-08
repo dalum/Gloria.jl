@@ -1,8 +1,6 @@
 # Gloria
 Gloria is a simple 2D game engine built on top of [SDL2](https://github.com/jonathanBieler/SimpleDirectMediaLayer.jl) and written in pure Julia.
 
-It is not actively developed, but should be reasonably stable.
-
 # Usage
 
 Please consult the `examples/` folder for examples of how to use Gloria.
