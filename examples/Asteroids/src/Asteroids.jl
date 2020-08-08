@@ -56,17 +56,16 @@ end
 
 function Physical{Shield}(t)
     self = Physical(Shield(), circle(Vertex(0., 0.), 50))
-    settimer!(window, t, ()->kill!(object_layer, self))
+    settimer!(window, t, () -> kill!(object_layer, self))
     return self
 end
 
 function Physical{LaserBeam}(t, x, y, vx, vy, θ)
     shape = circle(Vertex(0., 0.), 5)
     self = Physical(LaserBeam(), shape; position=SVector(x, y), angle=SVector(θ), velocity=SVector(vx, vy))
-    settimer!(window, t, ()->kill!(object_layer, self))
+    settimer!(window, t, () -> kill!(object_layer, self))
     return self
 end
-Base.size(::Physical{LaserBeam}) = 25
 
 function Physical{Rock}(scale, x, y, vx, vy, θ, ω)
     n = 12
@@ -117,7 +116,7 @@ end
 function update!(self::Controls, ::Gloria.AbstractLayer, t, dt)
     if self.level > 0 && count(x->x isa Physical{Rock}, object_layer) == 0
         if !self.transition
-            settimer!(window, t + 1, ()->(nextlevel!(t+1); self.transition = false))
+            settimer!(window, t + 1, () -> (nextlevel!(t + 1); self.transition = false))
             self.transition = true
         end
     end
@@ -168,33 +167,35 @@ end
 function update!(self::Physical{Shield}, ::Gloria.AbstractLayer, t, dt)
     setposition!(self, Gloria.Physics.position(player))
 
-    for rock in filter(
-            obj ->  obj isa Physical{Rock} &&
-                    isalive(object_layer, obj) &&
-                    intersects(self, obj),
-            object_layer
+    for obj in object_layer
+        if (
+            obj isa Physical{Rock} &&
+            isalive(object_layer, obj) &&
+            intersects(self, obj)
         )
-        destroyrock!(rock, self)
+            destroyrock!(obj, self)
+        end
     end
 end
 
 function update!(self::Physical{LaserBeam}, ::Gloria.AbstractLayer, t, dt)
-    for rock in filter(
-            obj ->  obj isa Physical{Rock} &&
-                    isalive(object_layer, obj) &&
-                    intersects(self, obj),
-            object_layer
+    for obj in object_layer
+        if (
+            obj isa Physical{Rock} &&
+            isalive(object_layer, obj) &&
+            intersects(self, obj)
         )
-        kill!(object_layer, self)
-        destroyrock!(rock, self)
+            kill!(object_layer, self)
+            destroyrock!(obj, self)
+        end
     end
 end
 
 function Gloria.after_update!(self::Physical{<:AsteroidsObject}, ::Gloria.AbstractLayer, t, dt)
     x, y = position(self)
-    x >  width/2  && (x -= width)
+    x > width/2  && (x -= width)
     x < -width/2  && (x += width)
-    y >  height/2 && (y -= height)
+    y > height/2 && (y -= height)
     y < -height/2 && (y += height)
     setposition!(self, SVector(x, y))
 end
@@ -322,26 +323,29 @@ end
 ##################################################
 
 # const width, height = 1920, 1080
-const width, height = 800, 600
-const wrap_width, wrap_height = width + 100, height + 100
-
-const controls = Controls()
-const controls_layer = Layer([controls])
-const banner_layer = Layer(Banner[], width/2, height/2)
-const object_layer = Layer(Physical[], width/2, height/2)
-
-const scene = Scene(object_layer, banner_layer, controls_layer, color=colorant"#202020")
-const window = Window("Asteroids", width, height, scene, fullscreen=false)
-
-const resources = Resources(window)
-const keyboard = Gloria.KeyboardState()
-
-const laser_sound = Audio(resources, abspath(@__DIR__, "..", "assets", "laser.wav"))
-const font_noto = Font(resources, abspath(@__DIR__, "..", "assets", "NotoSans-Black.ttf"), fontsize=24)
-
-const player = Physical{Player}(100., 360.)
 
 function main(; keepalive=true)
+    @eval begin
+        const width, height = 800, 600
+        const wrap_width, wrap_height = width + 100, height + 100
+
+        const controls = Controls()
+        const controls_layer = Layer([controls])
+        const banner_layer = Layer(Banner[], width/2, height/2)
+        const object_layer = Layer(Physical[], width/2, height/2)
+
+        const scene = Scene(object_layer, banner_layer, controls_layer, color=colorant"#202020")
+        const window = Window("Asteroids", width, height, scene, fullscreen=false)
+
+        const resources = Resources(window)
+        const keyboard = Gloria.KeyboardState()
+
+        const laser_sound = Audio(resources, abspath(@__DIR__, "..", "assets", "laser.wav"))
+        const font_noto = Font(resources, abspath(@__DIR__, "..", "assets", "NotoSans-Black.ttf"), fontsize=24)
+
+        const player = Physical{Player}(100., 360.)
+    end
+
     Gloria.run!(window)
     startgame!(0)
     keepalive && wait(window)

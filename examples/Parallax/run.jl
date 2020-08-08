@@ -1,5 +1,3 @@
-using Parallax
+using Parallax: main
 
-Parallax.main(
-    keepalive = !Base.isinteractive(),
-)
+main(keepalive=!Base.isinteractive())

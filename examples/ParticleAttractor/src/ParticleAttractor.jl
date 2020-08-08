@@ -19,20 +19,6 @@ mutable struct Particle <: AbstractObject
     resistance::Float64
 end
 
-const width, height = 800, 600
-const world = World(
-    Ref{Int}(false),
-    AbstractObject[Particle(
-        width/2 + rand() - 0.5, height/2 + rand() - 0.5,
-        0, 0,
-        200, 0.5
-    ) for _ in 1:15000]
-)
-const controls_layer = Layer([Controls()], show=false)
-const scene = Scene(Layer([world]), controls_layer)
-const window = Window("Particle Attractor", width, height, scene, fullscreen=false)
-
-
 function Gloria.onevent!(::Controls, e::Event{:mousebutton_down})
     world.action[] += 2 - e.button
 end
@@ -66,8 +52,9 @@ end
 
 @fastmath function Gloria.update!(obj1::Particle, obj2::Particle, t, dt)
     Δx, Δy = obj1.x - obj2.x, obj1.y - obj2.y
-    obj1.vx += 1e-4 * dt * (obj1.accel * Δx / (Δx^2 + Δy^2 + 1))
-    obj1.vy += 1e-4 * dt * (obj1.accel * Δy / (Δx^2 + Δy^2 + 1))
+    f = 1e-2 * dt * (obj1.accel / (Δx^2 + Δy^2 + 1))
+    obj1.vx += f*Δx
+    obj1.vy += f*Δy
 end
 
 function Gloria.render!(::Layer, obj::World, frame, fps)
@@ -91,6 +78,21 @@ function Gloria.render!(window::Window, obj::Particle, frame, fps)
 end
 
 function main(; keepalive=true)
+    @eval begin
+        const width, height = 1600, 1000
+        const world = World(
+            Ref{Int}(false),
+            AbstractObject[Particle(
+                width/2 + 50*(rand() - 0.5), height/2 + 50*(rand() - 0.5),
+                0, 0,
+                200, 0.5
+            ) for _ in 1:15000]
+        )
+        const controls_layer = Layer([Controls()], show=false)
+        const scene = Scene(Layer([world]), controls_layer)
+        const window = Window("Particle Attractor", width, height, scene, fullscreen=false)
+    end
+
     Gloria.run!(window)
     keepalive && wait(window)
 end

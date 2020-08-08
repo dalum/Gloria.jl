@@ -1,5 +1,3 @@
-using Inside
+using Inside: main
 
-Inside.main(
-    keepalive = !Base.isinteractive(),
-)
+main(keepalive=!Base.isinteractive())

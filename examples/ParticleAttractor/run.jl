@@ -1,5 +1,3 @@
-using ParticleAttractor
+using ParticleAttractor: main
 
-ParticleAttractor.main(
-    keepalive = !Base.isinteractive(),
-)
+main(keepalive=!Base.isinteractive())

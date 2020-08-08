@@ -1,5 +1,3 @@
-using Particles
+using Particles: main
 
-Particles.main(
-    keepalive = !Base.isinteractive(),
-)
+main(keepalive=!Base.isinteractive())

@@ -12,7 +12,7 @@ end
 
 function Audio(resources::Resources, filename::String)
     if filename in keys(resources)
-        @debug("resource already loaded: '$filename'")
+        @debug("resource already loaded", filename)
         return resources[filename]::Audio
     end
 
@@ -27,12 +27,16 @@ function destroy!(a::Audio)
     return nothing
 end
 
-load(f::File{format"WAV"}) = Gloria.SDL.Mix_LoadWAV(f.filename)
-load(f::File{format"OGG"}) = Gloria.SDL.Mix_LoadWAV(f.filename)
-load(f::File{format"MP3"}) = Gloria.SDL.Mix_LoadWAV(f.filename)
+load(f::File{format"WAV"}) = SDL.Mix_LoadWAV(f.filename)
+load(f::File{format"OGG"}) = SDL.Mix_LoadWAV(f.filename)
+load(f::File{format"MP3"}) = SDL.Mix_LoadWAV(f.filename)
 
-function play!(audio::Audio; repeat::Int = 0, channel::Int = -1, volume::Int = 100)
+function play!(audio::Audio; repeat::Int=0, channel::Int=-1, volume::Int=100)
     channel = SDL.Mix_PlayChannel(convert(Int32, channel)::Int32, audio.ptr, convert(Int32, repeat)::Int32)
+    if channel == -1
+        @warn("could not play audio sample", audio.filename, audio.ptr)
+        return audio
+    end
     SDL.Mix_Volume(channel, convert(Int32, volume)::Int32)
     push!(audio.channels, channel)
     return audio

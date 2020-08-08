@@ -14,10 +14,9 @@ Base.setproperty!(e::Event, name::Symbol, x) = setindex!(getfield(e, :fields), x
 mutable struct Loop
     name::String
     target_speed::Float64
-    state::Dict{Symbol,Any}
+    paused::Bool
     task::Task
-
-    Loop(name::String, target_speed::Float64 = 50.0) = new(name, target_speed, Dict{Symbol,Any}())
+    Loop(name::String, target_speed=50.0) = new(name, target_speed, false)
 end
 
 Base.schedule(loop::Loop) = schedule(loop.task)
@@ -34,7 +33,7 @@ Base.isless(a::Timeout, b::Timeout) = isless(b.t1, a.t1)
 A Window.
 
 """
-mutable struct Window{T <: AbstractVector{<:AbstractScene}} <: AbstractWindow{T}
+mutable struct Window{T} <: AbstractWindow{T}
     window_ptr::Ptr{SDL.Window}
     render_ptr::Ptr{SDL.Renderer}
     scene_stack::T
@@ -42,7 +41,7 @@ mutable struct Window{T <: AbstractVector{<:AbstractScene}} <: AbstractWindow{T}
     event_queue::Vector{Event}
     timer_queue::Vector{Timeout}
 
-    function Window{T}(title::String, width::Int, height::Int, scene_stack::T = AbstractScene[]; fullscreen::Bool = false) where {T <: AbstractVector{<:AbstractScene}}
+    function Window{T}(title, width, height, scene_stack::T; fullscreen=false) where {T}
         window_ptr = SDL.CreateWindow(title, Int32(SDL.WINDOWPOS_CENTERED_MASK), Int32(SDL.WINDOWPOS_CENTERED_MASK), Int32(width), Int32(height), fullscreen ? SDL.WINDOW_FULLSCREEN : UInt32(0))
         render_ptr = SDL.CreateRenderer(window_ptr, Int32(-1), UInt32(0))
         if render_ptr == C_NULL
@@ -51,7 +50,6 @@ mutable struct Window{T <: AbstractVector{<:AbstractScene}} <: AbstractWindow{T}
             error(unsafe_string(SDL.GetError()))
         end
         SDL.SetRenderDrawBlendMode(render_ptr, SDL.BLENDMODE_BLEND)
-        scene_stack = scene_stack
         loops = Dict{String,Loop}()
         event_queue = Event[]
         timer_queue = Timeout[]
@@ -61,8 +59,14 @@ mutable struct Window{T <: AbstractVector{<:AbstractScene}} <: AbstractWindow{T}
     end
 end
 
-Window(title::String, width::Int, height::Int, scene_stack::T = AbstractScene[]; fullscreen::Bool = false) where {T <: AbstractVector{<:AbstractScene}} = Window{T}(title, width, height, scene_stack, fullscreen=fullscreen)
-Window(title::String, width::Int, height::Int, scene::T, scenes::T...; fullscreen::Bool = false) where {T <: AbstractScene} = Window(title, width, height, [scene, scenes...], fullscreen=fullscreen)
+Window(title, width, height; kwargs...) = Window(title, width, height, AbstractScene[]; kwargs...)
+function Window(title, width, height, scene_stack::T; fullscreen=false) where {T}
+    return Window{T}(title, width, height, scene_stack, fullscreen=fullscreen)
+end
+
+function Window(title, width, height, scenes::AbstractScene...; kwargs...)
+    return Window(title, width, height, [scenes...]; kwargs...)
+end
 
 Base.show(io::IO, window::Window) = print(io, "Window(\"", unsafe_title(window), "\", ", join(size(window), ", "), ")")
 

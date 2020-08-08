@@ -111,28 +111,30 @@ end
 # Setup
 ##################################################
 
-const width, height = 800, 600
-const controls_layer = Layer([Controls()], width/2, height/2)
-
-const object_layer = Layer(Gloria.AbstractObject[Physics.CollisionSolver{2}()], width/2, height/2)
-
-const scene = Scene(controls_layer, object_layer, color=colorant"#D0D0D0")
-const window = Window("Particles", width, height, scene, fullscreen=false)
-
-const keyboard = Gloria.KeyboardState()
-
-add!(object_layer, Physical{Floor}(0., 200., -90.))
-add!(object_layer, Physical{Floor}(0., -200., 80.))
-add!(object_layer, Physical{Floor}(-300., 0., 20.))
-add!(object_layer, Physical{Floor}(300., 0., 190.))
-add!(object_layer, Physical{Plateau}(-200., 0., 300., 20., 10.))
-add!(object_layer, Physical{Plateau}(50., -150., 300., 20., -10.))
-add!(object_layer, Physical{Plateau}(100., 150., 300., 20., -10.))
-for _ in 1:0
-    add!(object_layer, Physical{Particle}(colorant"#000", rand(-width/2:width/2), rand(-height/2:(-height/2+200)), rand(3:7)))
-end
-
 function main(; keepalive=true)
+    @eval begin
+        const width, height = 800, 600
+        const controls_layer = Layer([Controls()], width/2, height/2)
+
+        const object_layer = Layer(Gloria.AbstractObject[Physics.CollisionSolver{2}()], width/2, height/2)
+
+        const scene = Scene(controls_layer, object_layer, color=colorant"#D0D0D0")
+        const window = Window("Particles", width, height, scene, fullscreen=false)
+
+        const keyboard = Gloria.KeyboardState()
+
+        add!(object_layer, Physical{Floor}(0., 200., -90.))
+        add!(object_layer, Physical{Floor}(0., -200., 80.))
+        add!(object_layer, Physical{Floor}(-300., 0., 20.))
+        add!(object_layer, Physical{Floor}(300., 0., 190.))
+        add!(object_layer, Physical{Plateau}(-200., 0., 300., 20., 10.))
+        add!(object_layer, Physical{Plateau}(50., -150., 300., 20., -10.))
+        add!(object_layer, Physical{Plateau}(100., 150., 300., 20., -10.))
+        for _ in 1:0
+            add!(object_layer, Physical{Particle}(colorant"#000", rand(-width/2:width/2), rand(-height/2:(-height/2+200)), rand(3:7)))
+        end
+    end
+
     Gloria.run!(window)
     keepalive && wait(window)
 end

@@ -1,47 +1,43 @@
-const SLEEP_MAKEUP_TIME = 0.0011 # TODO: Calculate this automatically
-const GLOBAL_LOOP_LOCK = [Channel{UInt8}(1)]
-put!(GLOBAL_LOOP_LOCK[], 0x01)
-
-macro loop(name::String, body::Expr)
-    _loop(name, body)
+macro loop(name, body)
+    return _loop(name, body)
 end
 
-macro loop(name::String, initialize::Expr, body::Expr, finalize::Expr = :())
-    _loop(name, initialize, body, finalize)
+macro loop(name, initialize, body, finalize=:())
+    return _loop(name, initialize, body, finalize)
 end
 
 _loop(name::String, body::Expr) = _loop(name, :(), body)
-function _loop(name::String, initialize::Expr, body::Expr, finalize::Expr = :(), target_speed::Float64 = 50.0)
-    global GLOBAL_LOOP_LOCK
-    esc(quote
-        function (window::Window, target_speed::Float64 = $target_speed)
+function _loop(name, initialize, body, finalize=:(), target_speed=50)
+    return quote
+        function (window::Window, target_speed=$target_speed)
             loop = Loop($name, target_speed)
-            _lock = 0x00
 
             task = @task try
-                state = loop.state
+                @debug "Running $($name) on thread: $(Threads.threadid())"
+                t0 = time()
+                ticks = 0
+                next_tick_time = (ticks + 1)/target_speed
+                elapsed_time = time() - t0
+                dt = max(next_tick_time - elapsed_time, 1e-3)
                 $initialize
                 while length(window.scene_stack) > 0
-                    t1 = time()
-                    _lock = take!($GLOBAL_LOOP_LOCK[])
                     $body
-                    put!($GLOBAL_LOOP_LOCK[], _lock)
-                    _lock = 0x00
-                    t2 = time()
-                    sleep(max(1/loop.target_speed - (t2 - t1) - $SLEEP_MAKEUP_TIME, 0.0))
+                    next_tick_time = (ticks + 1)/target_speed
+                    elapsed_time = time() - t0
+                    dt = max(next_tick_time - elapsed_time, 1e-3)
+                    sleep(dt)
+                    ticks += 1
                 end
                 $finalize
             catch e
-                if !(e isa InvalidStateException)
-                    println("ERROR ($(loop.name)): ", sprint(showerror, e, stacktrace(catch_backtrace())))
-                    _lock === 0x01 && put!($GLOBAL_LOOP_LOCK[], _lock)
-                end
+                @error "$(loop.name)" exception=(e, catch_backtrace())
+                rethrow()
             end
 
             loop.task = task
             return loop
         end
-    end)
+    end |> esc
 end
 
 # Default loops
@@ -53,40 +49,31 @@ const DEFAULT_EVENT_LOOP = @loop "event" (event_data = zeros(UInt8, 56)) begin
     end
 end
 
-const DEFAULT_UPDATE_LOOP = @loop "update" (state[:t0] = time(); state[:t] = 0.0; state[:dt] = 0.0; state[:step] = false; state[:paused] = false) begin
-    if !state[:paused]
-        state[:dt] = min(t1 - state[:t0], 1/target_speed)
-        state[:t0] = t1
-        state[:t] += state[:dt]
+const DEFAULT_UPDATE_LOOP = @loop "update" (t = elapsed_time) begin
+    if !loop.paused
+        t = elapsed_time
     end
 
     for event in window.event_queue
-        onevent!(window, event, state[:t], state[:dt])
+        onevent!(window, event, t, dt)
     end
     empty!(window.event_queue)
 
     sort!(window.timer_queue)
-    while length(window.timer_queue) > 0 && window.timer_queue[end].t1 <= state[:t]
+    while length(window.timer_queue) > 0 && window.timer_queue[end].t1 <= t
         pop!(window.timer_queue).fn()
     end
 
-    if !state[:paused]
-        before_update!(window, state[:t], state[:dt])
-        update!(window, state[:t], state[:dt])
-        after_update!(window, state[:t], state[:dt])
-    end
-    if state[:step]
-        state[:paused] = true
+    if !loop.paused
+        before_update!(window, t, dt)
+        update!(window, t, dt)
+        after_update!(window, t, dt)
     end
 end
 
-const DEFAULT_RENDER_LOOP = @loop "render" (state[:frame] = 1; fps = 0.0; state[:t0] = time()) begin
-    if state[:frame] % target_speed == 0
-        fps = target_speed / (time() - state[:t0])
-        state[:t0] = time()
-    end
-    render!(window, state[:frame], fps)
-    state[:frame] += 1
+const DEFAULT_RENDER_LOOP = @loop "render" () begin
+    fps = inv(dt)
+    render!(window, ticks, fps)
 end
 
 """
@@ -96,27 +83,42 @@ Execute `window`.
 
 """
 function run!(window::Window)
-    return run!(window, DEFAULT_EVENT_LOOP, DEFAULT_UPDATE_LOOP, DEFAULT_RENDER_LOOP)
+    loops = map(
+        loop -> loop(window),
+        (DEFAULT_EVENT_LOOP, DEFAULT_UPDATE_LOOP, DEFAULT_RENDER_LOOP)
+    )
+    for loop in loops
+        window.loops[loop.name] = loop
+    end
+    Threads.@spawn schedule(loops[1])
+    Threads.@spawn schedule(loops[2])
+    schedule(loops[3])
+
+    return window
 end
 
-function run!(window::Window, loops::Function...)
-    for loop in map(loop->loop(window), loops)
+function run!(window::Window, loops...)
+    for loop in map(loop -> loop(window), loops)
         window.loops[loop.name] = loop
         schedule(loop)
     end
     return window
 end
 
-function reload!(window; target_event_speed::Float64 = 50.0, target_update_speed::Float64 = 50.0, target_render_speed::Float64 = 50.0)
-    close(GLOBAL_LOOP_LOCK[])
+function register_loops!(window::Window, loops...)
+    for loop in map(loop -> loop(window), loops)
+        window.loops[loop.name] = loop
+    end
+    return window
+end
+
+function reload!(window)
     wait(window)
     empty!(window.tasks)
-    GLOBAL_LOOP_LOCK[] = Channel{UInt8}(1)
-    put!(GLOBAL_LOOP_LOCK[], 0x01)
     return run!(window, DEFAULT_EVENT_LOOP, DEFAULT_UPDATE_LOOP, DEFAULT_RENDER_LOOP)
 end
 
-settimer!(window::Window, t::Real, fn::Function) = push!(window.timer_queue, Timeout(convert(Float64, t), fn))
+settimer!(window::Window, t::Real, fn::Function) = push!(window.timer_queue, Timeout(t, fn))
 
 struct InterruptQuit end
 
@@ -126,7 +128,6 @@ struct InterruptQuit end
 Gracefully quit `window`, propagating the event, `e`, which caused
 `quit!` to be called to each scene in `window` to allow processing and
 optionally interrupting the call by returning `InterruptQuit()`.
-
 """
 function quit!(window::Window, e::Event)
     while length(window.scene_stack) > 0
@@ -160,10 +161,10 @@ onevent!(window::Window, e::Event{:quit}) = quit!(window, e)
 onevent!(window::Window, e::Event, t, dt) = length(window.scene_stack) > 0 ? onevent!(activescene(window), e, t, dt) : window
 
 for fn in [:before_update!, :update!, :after_update!]
-    @eval $fn(window::Window, t::Float64, dt::Float64) = length(window.scene_stack) > 0 ? $fn(activescene(window), window, t, dt) : nothing
+    @eval $fn(window::Window, t, dt) = length(window.scene_stack) > 0 ? $fn(activescene(window), window, t, dt) : nothing
 end
 
-render!(window::Window, frame::Int, fps::Float64) = length(window.scene_stack) > 0 ? render!(window, activescene(window), frame, fps) : nothing
+render!(window::Window, frame, fps) = length(window.scene_stack) > 0 ? render!(window, activescene(window), frame, fps) : nothing
 
 function onevent!(scene::AbstractScene, e::Event)
     for layer in scene.layers
@@ -181,7 +182,7 @@ end
 
 
 for fn in [:before_update!, :update!, :after_update!]
-    @eval function $fn(scene::AbstractScene, ::Window, t::Float64, dt::Float64)
+    @eval function $fn(scene::AbstractScene, ::Window, t, dt)
         for layer in scene.layers
             $fn(layer, scene, t, dt)
         end
@@ -189,7 +190,7 @@ for fn in [:before_update!, :update!, :after_update!]
     end
 end
 
-function render!(window::Window, scene::AbstractScene, frame::Int, fps::Float64)
+function render!(window::Window, scene::AbstractScene, frame, fps)
     setcolor!(window, scene.color)
     clear!(window)
     for layer in scene.layers
@@ -212,7 +213,7 @@ function onevent!(layer::AbstractLayer, e::Event, t, dt)
     return layer
 end
 
-function before_update!(layer::AbstractLayer, ::AbstractScene, t::Float64, dt::Float64)
+function before_update!(layer::AbstractLayer, ::AbstractScene, t, dt)
     populate!(layer)
     for obj in layer.objects
         before_update!(obj, layer, t, dt)
@@ -220,14 +221,14 @@ function before_update!(layer::AbstractLayer, ::AbstractScene, t::Float64, dt::F
     return layer
 end
 
-function update!(layer::AbstractLayer, ::AbstractScene, t::Float64, dt::Float64)
+function update!(layer::AbstractLayer, ::AbstractScene, t, dt)
     for obj in layer.objects
         update!(obj, layer, t, dt)
     end
     return layer
 end
 
-function after_update!(layer::AbstractLayer, ::AbstractScene, t::Float64, dt::Float64)
+function after_update!(layer::AbstractLayer, ::AbstractScene, t, dt)
     for obj in layer.objects
         after_update!(obj, layer, t, dt)
     end
@@ -235,7 +236,7 @@ function after_update!(layer::AbstractLayer, ::AbstractScene, t::Float64, dt::Fl
     return layer
 end
 
-function render!(window::Window, layer::AbstractLayer, frame::Int, fps::Float64)
+function render!(window::Window, layer::AbstractLayer, frame, fps)
     if visible(layer)
         # sort!(layer.objects, by=layer.sortby)
         for obj in layer.objects

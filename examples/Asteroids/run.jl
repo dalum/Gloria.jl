@@ -1,5 +1,3 @@
-using Asteroids
+using Asteroids: main
 
-Asteroids.main(
-    keepalive=!Base.isinteractive(),
-)
+main(keepalive=!Base.isinteractive())
