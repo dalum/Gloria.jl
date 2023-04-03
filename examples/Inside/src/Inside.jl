@@ -40,8 +40,8 @@ end
 function onevent!(self::Shape, e::Event{:mousemotion})
     if self.active
         if getmousestate().left
-            self.x += e.rel_x
-            self.y += e.rel_y
+            self.x += e.xrel
+            self.y += e.yrel
         end
     end
 end
