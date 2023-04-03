@@ -11,11 +11,11 @@ mutable struct Texture{T} <: AbstractGraphics
     center_y::Int
 end
 
-function Texture(render_ptr::Ptr{SDL.Renderer}, sdl_surface::Ptr{SDL.Surface}; halign = 0.5, valign = 0.5)
-    texture_ptr = SDL.CreateTextureFromSurface(render_ptr, sdl_surface)
-    SDL.FreeSurface(sdl_surface)
+function Texture(render_ptr::Ptr{SDL.SDL_Renderer}, sdl_surface::Ptr{SDL.SDL_Surface}; halign = 0.5, valign = 0.5)
+    texture_ptr = SDL.SDL_CreateTextureFromSurface(render_ptr, sdl_surface)
+    SDL.SDL_FreeSurface(sdl_surface)
     width, height = Int[0], Int[0]
-    SDL.QueryTexture(texture_ptr, C_NULL, C_NULL, width, height)
+    SDL.SDL_QueryTexture(texture_ptr, C_NULL, C_NULL, width, height)
     self = Texture(texture_ptr, width[], height[], round(Int, width[]*halign), round(Int, height[]*valign))
     finalizer(destroy!, self)
     return self
@@ -51,11 +51,11 @@ function load(f::File{format"SVG"}, resources::Resources, width::Int, height::In
     Cairo.destroy(cairo_context)
 
     width, height = ceil(Int, cairo_surface.width), ceil(Int, cairo_surface.height)
-    sdl_surface = SDL.CreateRGBSurfaceFrom(pointer(cairo_surface.data),
+    sdl_surface = SDL.SDL_CreateRGBSurfaceFrom(pointer(cairo_surface.data),
                                            width, height, 32, Int32(width*4),
                                            0x00_ff_00_00, 0x00_00_ff_00, 0x00_00_00_ff, 0xff_00_00_00)
-    texture_ptr = SDL.CreateTextureFromSurface(resources.render_ptr, sdl_surface)
-    SDL.FreeSurface(sdl_surface)
+    texture_ptr = SDL.SDL_CreateTextureFromSurface(resources.render_ptr, sdl_surface)
+    SDL.SDL_FreeSurface(sdl_surface)
     Cairo.destroy(cairo_surface)
 
     if texture_ptr == C_NULL
@@ -65,8 +65,8 @@ function load(f::File{format"SVG"}, resources::Resources, width::Int, height::In
     return texture_ptr, width, height
 end
 
-function destroy!(texture::Texture{SDL.Texture})
-    SDL.DestroyTexture(texture.ptr)
+function destroy!(texture::Texture{SDL.SDL_Texture})
+    SDL.SDL_DestroyTexture(texture.ptr)
     texture.ptr = C_NULL
     return nothing
 end

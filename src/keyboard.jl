@@ -1,15 +1,13 @@
 # Events
-
-function parseevent(window::Window, ::Val{SDL.KEYDOWN}, data::Vector{UInt8})
-    return geteventdata(:key_down, data, :type => UInt32, :timestamp => UInt32, :window_id => UInt32,
-                        :state => UInt8, :repeat => UInt8, :empty => UInt16, :scancode => UInt32,
-                        :keycode => UInt32, :mod => UInt16)
+const KEY_PAIRS=(:type => UInt32, :timestamp => UInt32, :windowID => UInt32,
+                        :state => UInt8, :repeat => UInt8, :unused => UInt16, :scancode => UInt32,
+                        :sym => UInt32, :mod => UInt16)
+function parseevent(window::Window, ::Val{UInt32(SDL.SDL_KEYDOWN)}, data::Base.RefValue{SDL.SDL_Event})
+    return geteventdata(:key_down, data[].key,KEY_PAIRS...)
 end
 
-function parseevent(window::Window, ::Val{SDL.KEYUP}, data::Vector{UInt8})
-    return geteventdata(:key_up, data, :type => UInt32, :timestamp => UInt32, :window_id => UInt32,
-                        :state => UInt8, :repeat => UInt8, :empty => UInt16, :scancode => UInt32,
-                        :keycode => UInt32, :mod => UInt16)
+function parseevent(window::Window, ::Val{UInt32(SDL.SDL_KEYUP)}, data::Base.RefValue{SDL.SDL_Event})
+       return geteventdata(:key_up, data[].key,KEY_PAIRS...)
 end
 
 """
@@ -32,18 +30,18 @@ returns true if the event was triggered by a key repeat (i. e., a held
 key).
 
 """
-iskeycode(e::Event, key::String; repeat=false) = e.keycode == getkeycode(key) && (repeat || convert(Bool, e.repeat) == repeat)
+iskeycode(e::Event, key::String; repeat=false) = e.sym == getkeycode(key) && (repeat || convert(Bool, e.repeat) == repeat)
 
-getkeyname(e::Event) = unsafe_string(SDL.GetScancodeName(convert(Int32, e.scancode)))
-getkeycodename(e::Event) = unsafe_string(SDL.GetKeycodeName(convert(Int32, e.keycode)))
-getscancode(key::String) = SDL.GetScancodeFromName(key)
-getkeycode(key::String) = SDL.GetKeycodeFromName(key)
+getkeyname(e::Event) = unsafe_string(SDL.SDL_GetScancodeName( e.scancode))
+getkeycodename(e::Event) = unsafe_string(SDL.SDL_GetKeyName( e.sym))
+getscancode(key::String) = SDL.SDL_GetScancodeFromName(key)
+getkeycode(key::String) = SDL.SDL_GetKeyFromName(key)
 
 # Keyboard state
 
 struct KeyboardState
     state::Base.ReinterpretArray{Bool, 1, UInt8, Array{UInt8, 1}}
-    KeyboardState() = new(reinterpret(Bool, unsafe_wrap(Array{UInt8,1}, SDL.GetKeyboardState(C_NULL), 285)))
+    KeyboardState() = new(reinterpret(Bool, unsafe_wrap(Array{UInt8,1}, SDL.SDL_GetKeyboardState(C_NULL), 285)))
 end
 
 ispressed(keyboard::KeyboardState, key::String) = keyboard.state[getscancode(key) + 1]

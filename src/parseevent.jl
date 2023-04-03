@@ -1,28 +1,39 @@
-function bitcat(::Type{T}, arr)::T where T<:Number
-    out = zero(T)
-    for x in arr
-        out <<= sizeof(x)*8
-        out |= convert(T, x)
-    end
-    out
-end
-
-function geteventdata(TYPE::Symbol, data::Vector{UInt8}, pairs::Pair{Symbol,DataType}...)
+function geteventdata(TYPE::Symbol, data::Base.RefValue{SDL.SDL_Event}, pairs::Pair{Symbol,DataType}...)
     e = Event{TYPE}()
-    i = 1
     for pair in pairs
-        s = sizeof(pair.second)
-        setindex!(getfield(e, :fields), bitcat(pair.second, data[i+s-1:-1:i]), pair.first)
-        i += s
+        setindex!(getfield(e, :fields), 
+        	getproperty(getproperty(data[],TYPE),pair.first), pair.first)
     end
     return e
 end
 
-eventtype(data::Vector{UInt8}) = bitcat(UInt32, data[4:-1:1])
+function geteventdata(TYPE::Symbol, data::SDL.SDL_KeyboardEvent, symbols::Pair{Symbol,DataType}...)
+    e = Event{TYPE}()
+    # get(pairs, pair.first, pair.first)
+    for pair in first(symbols,5)
+        setindex!(getfield(e, :fields), 
+        	getproperty(data,pair.first), pair.first)
+    end
+    for pair in last(symbols,4)
+        setindex!(getfield(e, :fields), 
+        	getproperty(getproperty(data,:keysym),
+            pair.first)|>x->x isa Real ? x : pair.second(x), pair.first)
+    end
+    return e
+end
+function geteventdata(TYPE::Symbol, data, symbols::Pair{Symbol,DataType}...)
+    e = Event{TYPE}()
+    for pair in symbols
+        setindex!(getfield(e, :fields), 
+        	getproperty(data,pair.first), pair.first)
+    end
+    return e
+end
 
-parseevent(window::Window, data::Vector{UInt8}) = parseevent(window, Val(eventtype(data)), data)
-parseevent(window::Window, ::Val, data::Vector{UInt8}) = Event{:notsupported}()
+eventtype(event::Base.RefValue{SDL.SDL_Event}) = event[].type
 
-function parseevent(window::Window, ::Val{SDL.QUIT}, data::Vector{UInt8})
-    return geteventdata(:quit, data, :type => UInt32, :timestamp => UInt32)
+parseevent(window::Window, event::Base.RefValue{SDL.SDL_Event}) = parseevent(window, Val(eventtype(event)), event)
+parseevent(window::Window, ::Val, event::Base.RefValue{SDL.SDL_Event}) = Event{:notsupported}()
+function parseevent(window::Window, ::Val{UInt32(SDL.SDL_QUIT)}, event::Base.RefValue{SDL.SDL_Event})
+    return geteventdata(:quit, event, :type => UInt32, :timestamp => UInt32)
 end

@@ -1,7 +1,7 @@
 name = "Gloria"
 uuid = "5b2e8964-9f3b-11e8-3f79-610468876dfe"
 authors = ["Sakse Dalum <dalum@users.noreply.github.com>"]
-version = "0.2.1"
+version = "0.2.2"
 
 [deps]
 Cairo = "159f3aea-2a34-519c-b102-8c37f9878175"
@@ -22,7 +22,4 @@ DataStructures = "0.17"
 FileIO = "1.0"
 IterTools = "1.0"
 Rsvg = "1.0"
-SimpleDirectMediaLayer = "0.2"
 SnoopCompile = "1.7"
-StaticArrays = "0.12"
-julia = "1.5"

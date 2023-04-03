@@ -6,13 +6,13 @@ module Gloria
 using Colors
 using DataStructures: CircularBuffer, OrderedSet
 using FileIO
-using SimpleDirectMediaLayer
+import SimpleDirectMediaLayer as SDL
 
-const SDL = SimpleDirectMediaLayer
+const fps=120
 
 function __init__()
-    SDL.GL_SetAttribute(SDL.GL_MULTISAMPLEBUFFERS, 1)
-    SDL.GL_SetAttribute(SDL.GL_MULTISAMPLESAMPLES, 4)
+    SDL.SDL_GL_SetAttribute(SDL.SDL_GL_MULTISAMPLEBUFFERS, 1)
+    SDL.SDL_GL_SetAttribute(SDL.SDL_GL_MULTISAMPLESAMPLES, 4)
     SDL.init()
 end
 
