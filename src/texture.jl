@@ -65,6 +65,21 @@ function load(f::File{format"SVG"}, resources::Resources, width::Int, height::In
     return texture_ptr, width, height
 end
 
+import Images
+
+function load(f::File{format"PNG"}, resources::Resources, width::Int, height::Int, scale::Real)
+    w,h=Images.widthheight(Images.load(f.filename))
+    width = ceil(Int, scale*(width >= 0 ? width :  w))
+    height = ceil(Int, scale*(height >= 0 ? height : h))
+    texture_ptr = SDL.IMG_Load(f.filename)
+    texture_ptr = SDL.SDL_CreateTextureFromSurface(resources.render_ptr, texture_ptr)
+    if texture_ptr == C_NULL
+        error("Failed to load texture from: '$(f.filename)'")
+    end
+
+    return texture_ptr, width, height
+end
+
 function destroy!(texture::Texture{SDL.SDL_Texture})
     SDL.SDL_DestroyTexture(texture.ptr)
     texture.ptr = C_NULL
