@@ -1,6 +1,6 @@
 mutable struct Font{T} <: AbstractResource
     ptr::Ptr{T}
-    render_ptr::Ptr{SDL.Renderer}
+    render_ptr::Ptr{SDL.SDL_Renderer}
     filename::String
     fontsize::Int
     cache::Dict{UInt64,Texture}
@@ -45,6 +45,6 @@ function text(font::Font, txt::String; color=colorant"#303030", halign=0.0, vali
 end
 
 function Texture(font::Font, text::String; color=colorant"#303030", halign=0.0, valign=0.0)
-    sdl_surface = SDL.TTF_RenderText_Blended(font.ptr, text, SDL.Color(rgba_fromcolor(color)...))
+    sdl_surface = SDL.TTF_RenderText_Blended(font.ptr, text, SDL.SDL_Color(rgba_fromcolor(color)...))
     return Texture(font.render_ptr, sdl_surface, halign=halign, valign=valign)
 end

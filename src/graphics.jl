@@ -3,7 +3,7 @@
 Set the color for drawing operations on `window`.
 
 """
-setcolor!(window::Window, r::Int, g::Int, b::Int, a::Int) = SDL.SetRenderDrawColor(window.render_ptr, r, g, b, a)
+setcolor!(window::Window, r::Int, g::Int, b::Int, a::Int) = SDL.SDL_SetRenderDrawColor(window.render_ptr, r, g, b, a)
 setcolor!(window::Window, color::Colors.Color) = setcolor!(window, rgba_fromcolor(color)...)
 setcolor!(window::Window, color::Colors.Color, a::Int) = setcolor!(window, rgba_fromcolor(color, a)...)
 
@@ -13,7 +13,7 @@ setcolor!(window::Window, color::Colors.Color, a::Int) = setcolor!(window, rgba_
 Fill `window` with the currently selected color.
 
 """
-clear!(window::Window) = SDL.RenderClear(window.render_ptr)
+clear!(window::Window) = SDL.SDL_RenderClear(window.render_ptr)
 
 """
     present!(window)
@@ -22,7 +22,7 @@ Update `window` to display all render operations since the last call
 to `present!`.
 
 """
-present!(window::Window) = SDL.RenderPresent(window.render_ptr)
+present!(window::Window) = SDL.SDL_RenderPresent(window.render_ptr)
 
 ##################################################
 # Generic rendering
@@ -49,17 +49,17 @@ function render!(window::Window, layer::AbstractLayer, r::RenderTask{<:AbstractG
     render!(window, r.source, round(Int, x), round(Int, y), r.θ, scale, scale, r.offset_x, r.offset_y, r.flip)
 end
 
-function render!(window::Window, source::Texture{SDL.Texture}, x::Int, y::Int, θ::Float64 = 0.0, scale_x::Float64 = 1.0, scale_y::Float64 = 1.0, offset_x::Int = 0, offset_y::Int = 0, flip::Symbol = :none)
+function render!(window::Window, source::Texture{SDL.SDL_Texture}, x::Int, y::Int, θ::Float64 = 0.0, scale_x::Float64 = 1.0, scale_y::Float64 = 1.0, offset_x::Int = 0, offset_y::Int = 0, flip::Symbol = :none)
     center_x, center_y = (source.center_x + offset_x)*scale_x, (source.center_y + offset_y)*scale_y
-    rect = SDL.Rect(round(Int, x - center_x), round(Int, y - center_y),
+    rect = SDL.SDL_Rect(round(Int, x - center_x), round(Int, y - center_y),
                     round(Int, source.width*scale_x), round(Int, source.height*scale_y))
-    point = SDL.Point(round(Int, center_x), round(Int, center_y))
-    flip = UInt32(flip === :horizontal ? SDL.FLIP_HORIZONTAL :
-                  flip === :vertical ? SDL.FLIP_VERTICAL :
-                  SDL.FLIP_NONE)
-    GC.@preserve rect point SDL.RenderCopyEx(window.render_ptr, source.ptr,
-                                             C_NULL, pointer_from_objref(rect),
-                                             θ, pointer_from_objref(point),
+    point = SDL.SDL_Point(round(Int, center_x), round(Int, center_y))
+    flip = flip === :horizontal ? SDL.SDL_FLIP_HORIZONTAL :
+                  flip === :vertical ? SDL.SDL_FLIP_VERTICAL :
+                  SDL.SDL_FLIP_NONE
+    GC.@preserve rect point SDL.SDL_RenderCopyEx(window.render_ptr, source.ptr,
+                                             C_NULL, Ref(rect),
+                                             θ, Ref(point),
                                              flip)
     return window
 end
@@ -71,30 +71,30 @@ end
 """
 """
 function drawrect!(window::Window, x::Int, y::Int, w::Int, h::Int)
-    rect = SDL.Rect(x, y, w, h)
-    GC.@preserve rect SDL.RenderDrawRect(window.render_ptr, pointer_from_objref(rect))
+    rect = SDL.SDL_Rect(x, y, w, h)
+    GC.@preserve rect SDL.SDL_RenderDrawRect(window.render_ptr, pointer_from_objref(rect))
     return window
 end
 
 """
 """
 function fillrect!(window::Window, x::Int, y::Int, w::Int, h::Int)
-    rect = SDL.Rect(x, y, w, h)
-    GC.@preserve rect SDL.RenderFillRect(window.render_ptr, pointer_from_objref(rect))
+    rect = SDL.SDL_Rect(x, y, w, h)
+    GC.@preserve rect SDL.SDL_RenderFillRect(window.render_ptr, pointer_from_objref(rect))
     return window
 end
 
 """
 """
 function drawpoint!(window::Window, x::Int, y::Int)
-    SDL.RenderDrawPoint(window.render_ptr, Int32(x), Int32(y))
+    SDL.SDL_RenderDrawPoint(window.render_ptr, Int32(x), Int32(y))
     return window
 end
 
 """
 """
 function drawline!(window::Window, x1::Int, y1::Int, x2::Int, y2::Int)
-    SDL.RenderDrawLine(window.render_ptr, Int32(x1), Int32(y1), Int32(x2), Int32(y2))
+    SDL.SDL_RenderDrawLine(window.render_ptr, Int32(x1), Int32(y1), Int32(x2), Int32(y2))
     return window
 end
 
@@ -116,7 +116,7 @@ function render!(window::Window, l::AbstractLineShape{N,2}, x, y, θ = 0.0; scal
     end
 end
 
-function render!(window::Window, l::HalfPlane, x, y, θ = 0.0; scale = 1.0, color) where N
+function render!(window::Window, l::HalfPlane, x, y, θ = 0.0; scale = 1.0, color)
     setcolor!(window, color)
     for e in edges(l |> rotate(θ) |> translate(x, y))
         @inbounds x1 = e[1].x*scale

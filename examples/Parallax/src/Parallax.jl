@@ -22,19 +22,19 @@ function onevent!(::Controls, e::Event{:mousemotion})
     # Pan
     if Gloria.getmousestate().left
         for layer in object_layers
-            layer.x += e.rel_x * layer.scale
-            layer.y += e.rel_y * layer.scale
+            layer.x += e.xrel * layer.scale
+            layer.y += e.yrel * layer.scale
         end
     end
     # Zoom
     if Gloria.getmousestate().right
         for layer in object_layers
-            layer.scale *= 1.001^e.rel_y
-            layer.x = (layer.x - width/2)*1.001^e.rel_y + width/2
-            layer.y = (layer.y - height/2)*1.001^e.rel_y + height/2
+            layer.scale *= 1.001^e.yrel
+            layer.x = (layer.x - width/2)*1.001^e.yrel + width/2
+            layer.y = (layer.y - height/2)*1.001^e.yrel + height/2
             # truck/pedestal (moving the scene)
-            # layer.x += e.rel_x
-            # layer.y += e.rel_y
+            # layer.x += e.xrel
+            # layer.y += e.yrel
         end
     end
 end

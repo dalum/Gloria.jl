@@ -16,7 +16,7 @@ mutable struct Loop
     target_speed::Float64
     paused::Bool
     task::Task
-    Loop(name::String, target_speed=50.0) = new(name, target_speed, false)
+    Loop(name::String, target_speed=fps) = new(name, target_speed, false)
 end
 
 Base.schedule(loop::Loop) = schedule(loop.task)
@@ -34,22 +34,24 @@ A Window.
 
 """
 mutable struct Window{T} <: AbstractWindow{T}
-    window_ptr::Ptr{SDL.Window}
-    render_ptr::Ptr{SDL.Renderer}
+    window_ptr::Ptr{SDL.SDL_Window}
+    render_ptr::Ptr{SDL.SDL_Renderer}
     scene_stack::T
     loops::Dict{String, Loop}
     event_queue::Vector{Event}
     timer_queue::Vector{Timeout}
 
     function Window{T}(title, width, height, scene_stack::T; fullscreen=false) where {T}
-        window_ptr = SDL.CreateWindow(title, Int32(SDL.WINDOWPOS_CENTERED_MASK), Int32(SDL.WINDOWPOS_CENTERED_MASK), Int32(width), Int32(height), fullscreen ? SDL.WINDOW_FULLSCREEN : UInt32(0))
-        render_ptr = SDL.CreateRenderer(window_ptr, Int32(-1), UInt32(0))
+        fullscreen=fullscreen ? SDL.SDL_WINDOW_FULLSCREEN : UInt32(0)
+        window_ptr = SDL.SDL_CreateWindow(title, Int32(SDL.SDL_WINDOWPOS_CENTERED_MASK), Int32(SDL.SDL_WINDOWPOS_CENTERED_MASK), Int32(width), Int32(height),
+            UInt32(fullscreen|SDL.SDL_WINDOW_ALLOW_HIGHDPI|SDL.SDL_WINDOW_OPENGL))
+        render_ptr = SDL.SDL_CreateRenderer(window_ptr, Int32(-1),  UInt32(SDL.SDL_RENDERER_ACCELERATED | SDL.SDL_RENDERER_PRESENTVSYNC))
         if render_ptr == C_NULL
-            SDL.DestroyWindow(window_ptr)
-            SDL.DestroyRenderer(render_ptr)
-            error(unsafe_string(SDL.GetError()))
+            SDL.SDL_DestroyWindow(window_ptr)
+            SDL.SDL_DestroyRenderer(render_ptr)
+            error(unsafe_string(SDL.SDL_GetError()))
         end
-        SDL.SetRenderDrawBlendMode(render_ptr, SDL.BLENDMODE_BLEND)
+        SDL.SDL_SetRenderDrawBlendMode(render_ptr, SDL.SDL_BLENDMODE_BLEND)
         loops = Dict{String,Loop}()
         event_queue = Event[]
         timer_queue = Timeout[]
@@ -72,8 +74,8 @@ Base.show(io::IO, window::Window) = print(io, "Window(\"", unsafe_title(window),
 
 function destroy!(window::Window)
     empty!(window.scene_stack)
-    SDL.DestroyWindow(window.window_ptr)
-    SDL.DestroyRenderer(window.render_ptr)
+    SDL.SDL_DestroyWindow(window.window_ptr)
+    SDL.SDL_DestroyRenderer(window.render_ptr)
     return nothing
 end
 
@@ -165,11 +167,19 @@ Return a tuple containing the dimensions of `window`.
 """
 function Base.size(window::Window)
     width, height = Int32[0], Int32[0]
-    SDL.GetWindowSize(window.window_ptr, pointer(width), pointer(height))
+    SDL.SDL_GetWindowSize(window.window_ptr, pointer(width), pointer(height))
     return width[], height[]
 end
 
-unsafe_title(window::Window) = unsafe_string(SDL.GetWindowTitle(window.window_ptr))
+function Base.size(window::Window,::Bool)
+    w,h,w_highDPI,h_highDPI = Int32[0],Int32[0],Int32[0],Int32[0]
+    SDL.SDL_GetWindowSize(window.window_ptr, w, h)
+    SDL.SDL_GL_GetDrawableSize(window.window_ptr, w_highDPI, h_highDPI)
+    return w[],h[],w_highDPI[],h_highDPI[]
+end
+
+
+unsafe_title(window::Window) = unsafe_string(SDL.SDL_GetWindowTitle(window.window_ptr))
 
 Base.push!(window::Window, scenes::AbstractScene...) = push!(window.scene_stack, scenes...)
 Base.pop!(window::Window) = pop!(window.scene_stack)

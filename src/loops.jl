@@ -7,7 +7,7 @@ macro loop(name, initialize, body, finalize=:())
 end
 
 _loop(name::String, body::Expr) = _loop(name, :(), body)
-function _loop(name, initialize, body, finalize=:(), target_speed=50)
+function _loop(name, initialize, body, finalize=:(), target_speed=fps)
     return quote
         function (window::Window, target_speed=$target_speed)
             loop = Loop($name, target_speed)
@@ -42,9 +42,9 @@ end
 
 # Default loops
 
-const DEFAULT_EVENT_LOOP = @loop "event" (event_data = zeros(UInt8, 56)) begin
-    while SDL.PollEvent(event_data) != 0
-        event = parseevent(window, event_data)
+const DEFAULT_EVENT_LOOP = @loop "event" (event_ref = Ref{SDL.SDL_Event}()) begin
+    while Bool(SDL.SDL_PollEvent(event_ref))
+        event = parseevent(window, event_ref)
         onevent!(window, event)
     end
 end

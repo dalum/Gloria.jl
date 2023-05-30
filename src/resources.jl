@@ -1,7 +1,7 @@
 abstract type AbstractResource end
 
 struct Resources{T<:AbstractResource}
-    render_ptr::Ptr{SDL.Renderer}
+    render_ptr::Ptr{SDL.SDL_Renderer}
     d::Dict{String, T}
 end
 Resources{T}(window::Window) where {T} = Resources(window.render_ptr, Dict{String, T}())
